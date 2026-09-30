@@ -5,7 +5,9 @@ import { Bot } from '../sim/Bot';
 import type { Dir } from '../sim/InputBuffer';
 import { Simulation } from '../sim/Simulation';
 import { GameOver } from '../ui/GameOver';
+import { Hud } from '../ui/Hud';
 import { Menu } from '../ui/Menu';
+import { Pause } from '../ui/Pause';
 import { FixedStepLoop, RafDriver } from './GameLoop';
 import { randomSeed } from './Rng';
 import type { GameState } from './StateMachine';
@@ -25,6 +27,8 @@ export class Game {
   private readonly bot: Bot;
   private readonly menu: Menu;
   private readonly gameOver: GameOver;
+  private readonly hud: Hud;
+  private readonly pause: Pause;
   /** When true the perfect-play bot drives the runner (attract mode / smoke tests). */
   autopilot = false;
   private deathTimer = 0;
@@ -40,6 +44,11 @@ export class Game {
     this.menu = new Menu(ui, {
       onPlay: () => this.play(),
       onSettings: () => {},
+    });
+    this.hud = new Hud(ui, () => this.togglePause());
+    this.pause = new Pause(ui, {
+      onResume: () => this.togglePause(),
+      onMenu: () => this.toMenu(),
     });
     this.gameOver = new GameOver(ui, {
       onRetry: () => this.play(),
@@ -72,6 +81,10 @@ export class Game {
     this.states.go('Menu');
   }
 
+  get state(): GameState {
+    return this.states.state;
+  }
+
   togglePause(): void {
     if (this.states.state === 'Playing' && this.sim.alive) this.states.go('Paused');
     else if (this.states.state === 'Paused') this.states.go('Playing');
@@ -93,12 +106,16 @@ export class Game {
     this.bot.reset();
     this.view.reset();
     this.loop.reset();
+    this.hud.reset();
     this.deathTimer = 0;
   }
 
   private onStateChange(to: GameState, _from: GameState): void {
     this.menu.root.classList.toggle('hidden', to !== 'Menu');
     if (to !== 'GameOver') this.gameOver.hide();
+    this.pause.root.classList.toggle('hidden', to !== 'Paused');
+    if (to === 'Playing' || to === 'Paused') this.hud.show();
+    else this.hud.hide();
     this.input.setEnabled(to === 'Playing');
     if (to === 'Menu') this.menu.setRecords(this.best, 0);
   }
@@ -123,6 +140,7 @@ export class Game {
       if (!this.sim.alive) this.afterDeath(dt, state);
     }
     this.view.draw(running ? dt : 0, alpha);
+    if (state === 'Playing') this.hud.update(this.sim);
   }
 
   private afterDeath(dt: number, state: GameState): void {
@@ -132,7 +150,7 @@ export class Game {
       this.startAttract();
       return;
     }
-    const score = Math.floor(this.sim.distance);
+    const score = this.sim.scoring.total;
     const newBest = score > this.best;
     this.best = Math.max(this.best, score);
     this.states.go('GameOver');
@@ -141,7 +159,7 @@ export class Game {
       score,
       best: this.best,
       newBest,
-      coins: 0,
+      coins: this.sim.scoring.coins,
       distance: this.sim.distance,
     });
   }

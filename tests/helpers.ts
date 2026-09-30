@@ -1,6 +1,7 @@
 import { DT } from '../src/config';
 import { Bot } from '../src/sim/Bot';
 import { Simulation } from '../src/sim/Simulation';
+import type { Segment } from '../src/world/Segment';
 
 export interface BotRunResult {
   sim: Simulation;
@@ -58,4 +59,15 @@ export function advanceUntil(sim: Simulation, predicate: () => boolean, maxSecon
     sim.step(DT);
   }
   return predicate();
+}
+
+/** Clears generated content from the first segments and returns the one under the runner. */
+export function emptyTrack(sim: Simulation): Segment {
+  for (let i = 0; i < sim.pool.count; i++) {
+    const seg = sim.pool.at(i);
+    seg.obstacleCount = 0;
+    seg.coinCount = 0;
+    seg.pickupCount = 0;
+  }
+  return sim.pool.at(0);
 }

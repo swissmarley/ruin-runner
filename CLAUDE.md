@@ -77,7 +77,7 @@ docs/DECISIONS.md      design decisions log
 - [x] **M2 Running core** — auto-run, 3 lanes, jump/slide, chase cam, fixed-step loop, input
 - [x] **M3 Procedural track** — segment pool, seeded gen, turns + windows, 10-min bot sim
 - [x] **M4 Obstacles & death** — patterns, collision, stumble/death, game over + instant retry
-- [ ] **M5 Pursuer, coins, power-ups, scoring** — Magnet/Shield/Surge (8 s), difficulty ramp
+- [x] **M5 Pursuer, coins, power-ups, scoring** — Magnet/Shield/Surge (8 s), difficulty ramp
 - [ ] **M6 Art & audio** — low-poly ruins, fog/lighting, particles, procedural SFX + music
 - [ ] **M7 UI, persistence, PWA** — menu/HUD/settings, save data, tutorial, installable PWA
 - [ ] **M8 Polish & perf** — adaptive quality, debug overlay, throttled profiling, README
@@ -97,3 +97,6 @@ docs/DECISIONS.md      design decisions log
   gap + edge grace, shield, surge, 2-stumble catch); bot beats 1000 + 1000 seeds with zero
   stumbles while performing thousands of jumps/slides/lane changes. Browser: Menu → Play →
   death → Game Over card → Retry resets in < 1 ms (+1 frame).
+- M5: scoring/multiplier, pursuer lunge/retreat, difficulty-ramp, coin/magnet/power-up and
+  placement-safety tests; bot collects coins while staying flawless. Browser: coins spin, HUD
+  (score, distance, relics, multiplier, pause) updates, Warden framing measured by projection.

@@ -3,10 +3,11 @@ import { DT } from '../src/config';
 import { Simulation } from '../src/sim/Simulation';
 import { turnWindowEnd, turnWindowStart } from '../src/systems/Turns';
 import type { Segment } from '../src/world/Segment';
-import { advance, advanceUntil } from './helpers';
+import { advance, advanceUntil, emptyTrack } from './helpers';
 
 function setup(seed = 5): { sim: Simulation; corner: Segment } {
   const sim = new Simulation(seed);
+  emptyTrack(sim);
   const corner = sim.upcomingCorner();
   if (!corner) throw new Error('expected a corner within the spawn horizon');
   return { sim, corner };

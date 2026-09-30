@@ -207,3 +207,147 @@ body {
 .buttons {
   margin-top: 8px;
 }
+
+/* ---------- HUD ---------- */
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  padding: calc(10px + var(--safe-top)) calc(12px + var(--safe-right)) 0
+    calc(12px + var(--safe-left));
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+  transition: opacity 0.2s ease;
+}
+
+.hud.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.hud-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.hud-left {
+  flex: 1;
+}
+
+.hud-score {
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-distance {
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-right {
+  text-align: right;
+}
+
+.hud-coins {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.coin-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffe79a, #f2c14e 45%, #b5832a);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
+}
+
+.hud-mult {
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+
+.hud-pause {
+  pointer-events: auto;
+  width: 48px;
+  height: 48px;
+  flex: none;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(27, 20, 16, 0.55)
+    linear-gradient(
+      90deg,
+      transparent 17px,
+      var(--ink) 17px,
+      var(--ink) 22px,
+      transparent 22px,
+      transparent 26px,
+      var(--ink) 26px,
+      var(--ink) 31px,
+      transparent 31px
+    )
+    no-repeat center / 48px 20px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hud-timers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  width: 150px;
+}
+
+.timer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.timer.hidden {
+  display: none;
+}
+
+.timer-label {
+  width: 52px;
+}
+
+.timer-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.timer-bar {
+  height: 100%;
+  transform-origin: left center;
+  background: var(--ink);
+}
+
+.timer-magnet .timer-bar {
+  background: #e0413a;
+}
+
+.timer-shield .timer-bar {
+  background: #4fb3ff;
+}
+
+.timer-surge .timer-bar {
+  background: #ffd23f;
+}

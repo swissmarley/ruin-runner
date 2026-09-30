@@ -8,9 +8,11 @@ import {
 } from '../config';
 import { Player } from '../entities/Player';
 import { PowerUpTimers } from '../entities/PowerUp';
+import { Pursuer } from '../entities/Pursuer';
 import type { CollisionHandler, HitKind } from '../systems/Collision';
 import { checkCollisions } from '../systems/Collision';
 import { distanceAtTime, speedAt } from '../systems/Difficulty';
+import { Scoring } from '../systems/Scoring';
 import { nextCorner } from '../systems/Turns';
 import { DIR_X, DIR_Z, PathFrame } from '../world/Heading';
 import type { Obstacle, Segment } from '../world/Segment';
@@ -18,6 +20,7 @@ import { SegmentPool } from '../world/SegmentPool';
 import { TrackGenerator } from '../world/TrackGenerator';
 import { Controls } from './Controls';
 import type { Dir } from './InputBuffer';
+import { updatePickups } from './Pickups';
 import { SimEvents } from './SimEvents';
 
 export type DeathCause = 'none' | 'missedTurn' | 'wrongTurn' | 'pit' | 'obstacle' | 'caught';
@@ -29,6 +32,8 @@ export type DeathCause = 'none' | 'missedTurn' | 'wrongTurn' | 'pit' | 'obstacle
 export class Simulation implements CollisionHandler {
   readonly player = new Player();
   readonly powerUps = new PowerUpTimers();
+  readonly pursuer = new Pursuer();
+  readonly scoring = new Scoring();
   readonly pool = new SegmentPool(SEGMENT_POOL_SIZE);
   readonly generator: TrackGenerator;
   /** Frame of the straight run the player is currently on. */
@@ -75,6 +80,8 @@ export class Simulation implements CollisionHandler {
     this.pool.clear();
     this.player.reset();
     this.powerUps.reset();
+    this.pursuer.reset();
+    this.scoring.reset();
     this.controls.reset();
     this.frame.set(0, 0, 0, this.startS);
     this.events.clear();
@@ -133,11 +140,14 @@ export class Simulation implements CollisionHandler {
     this.player.update(dt);
     if (wasAirborne && this.player.grounded) this.events.push('land');
     this.s += this.speed * dt;
+    this.scoring.addDistance(this.speed * dt);
     this.tickPowerUps(dt);
+    this.pursuer.update(dt, this.player.x);
     const turned = this.controls.updateTurn(this.powerUps.surge > 0);
     if (!this.alive) return;
     checkCollisions(this.pool, this.player, this.s, this.prevS, this);
     if (!this.alive) return;
+    updatePickups(this, dt);
     this.stream();
     this.updateWorldPosition();
     if (turned) {
@@ -179,11 +189,13 @@ export class Simulation implements CollisionHandler {
 
   private stumble(): void {
     if (this.recentlyStumbled) {
+      this.pursuer.onCaught();
       this.die('caught');
       return;
     }
     this.lastStumbleAt = this.elapsed;
     this.stumbles++;
+    this.pursuer.onStumble();
     this.events.push('stumble');
   }
 

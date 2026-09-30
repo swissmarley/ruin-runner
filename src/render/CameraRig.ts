@@ -49,8 +49,10 @@ export class CameraRig {
     const fz = -Math.cos(yaw);
     const rx = -fz;
     const rz = fx;
-    const dist = BASE_DISTANCE + closeness * 1.4;
-    const height = BASE_HEIGHT + closeness * 0.6;
+    // When the Warden is close, rise and pull back slightly so it shows at the bottom of the
+    // frame, right on the runner's heels, without hiding the runner.
+    const dist = BASE_DISTANCE + closeness * 0.3;
+    const height = BASE_HEIGHT + closeness * 1.5;
     // Anchor partway between the track center and the player so lane changes read clearly.
     const ax = px - rx * lateral * (1 - LATERAL_FOLLOW);
     const az = pz - rz * lateral * (1 - LATERAL_FOLLOW);

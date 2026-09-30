@@ -32,7 +32,7 @@ export function tierAt(difficulty: number): number {
  * below one slot, which guarantees any row-to-row transition across patterns is feasible.
  */
 export function restSlotsAt(difficulty: number): number {
-  return 1.9 - 0.9 * clamp01(difficulty);
+  return Math.max(1, 1.9 - 0.9 * clamp01(difficulty));
 }
 
 /** Probability that a straight carries an obstacle pattern (vs. a breather with coins only). */

@@ -15,6 +15,12 @@ import {
   tierAt,
   timeAtDistance,
 } from '../systems/Difficulty';
+import {
+  placeBreatherCoins,
+  placeBridgeCoins,
+  placePatternCoins,
+  placePowerUp,
+} from './CoinPlacer';
 import { patternSpan, SLOT_TIME } from './ObstaclePatterns';
 import { PatternPicker, placeCrumble, placePattern } from './PatternPlacer';
 import type { Segment, SegmentKind } from './Segment';
@@ -28,6 +34,10 @@ const MIN_STRAIGHTS_BETWEEN_CORNERS = 1;
 const BRIDGE_MIN_GAP = 5;
 const BRIDGE_LENGTH_TILES = [10, 11, 12];
 const MIN_STRAIGHT_TILES = 4;
+/** No power-ups in the opening stretch, then at most one every few segments. */
+const POWERUP_MIN_DISTANCE = 150;
+const POWERUP_MIN_SEGMENTS = 6;
+const POWERUP_CHANCE = 0.4;
 /** Extra meters after a pattern's last row center (covers the deepest obstacle). */
 const PATTERN_TAIL = 2;
 
@@ -62,6 +72,7 @@ export class TrackGenerator {
   private segmentsSinceBridge = 0;
   private emitted = 0;
   private cornerNext = false;
+  private segmentsSincePowerUp = 0;
   private readonly picker = new PatternPicker();
   private readonly ctx: GenContext = { difficulty: 0, speed: 0, cornerNext: false };
 
@@ -80,6 +91,7 @@ export class TrackGenerator {
     this.segmentsSinceBridge = 0;
     this.emitted = 0;
     this.cornerNext = false;
+    this.segmentsSincePowerUp = 0;
     this.picker.reset();
   }
 
@@ -140,7 +152,13 @@ export class TrackGenerator {
       Math.max(MIN_STRAIGHT_TILES * TILE_LENGTH, roundUpToTiles(wanted)),
     );
     this.place(seg, 'straight', length);
-    if (pattern) placePattern(seg, pattern, seg.startS + lead, slot, seg.decoSeed);
+    if (pattern) {
+      placePattern(seg, pattern, seg.startS + lead, slot, seg.decoSeed);
+      placePatternCoins(seg, this.rng, pattern, seg.startS + lead, slot, ctx.speed);
+    } else if (this.emitted > 0) {
+      placeBreatherCoins(seg, this.rng, ctx.speed);
+    }
+    this.maybePowerUp(seg, pattern ? seg.startS + lead * 0.5 : seg.startS + seg.length * 0.5);
 
     this.cornerNext = ctx.cornerNext;
     this.straightsSinceCorner++;
@@ -161,7 +179,20 @@ export class TrackGenerator {
     const length = Math.max(this.rng.pick(BRIDGE_LENGTH_TILES) * TILE_LENGTH, minLength);
     this.place(seg, 'bridge', Math.min(MAX_SEGMENT_LENGTH, length));
     placeCrumble(seg, seg.startS + lead + CRUMBLE_GAP_LENGTH / 2);
+    placeBridgeCoins(seg, this.rng, this.ctx.speed);
     this.segmentsSinceBridge = 0;
+  }
+
+  private maybePowerUp(seg: Segment, s: number): void {
+    this.segmentsSincePowerUp++;
+    if (
+      s < POWERUP_MIN_DISTANCE ||
+      this.segmentsSincePowerUp < POWERUP_MIN_SEGMENTS ||
+      !this.rng.chance(POWERUP_CHANCE)
+    ) {
+      return;
+    }
+    if (placePowerUp(seg, this.rng, s)) this.segmentsSincePowerUp = 0;
   }
 
   private emitCorner(seg: Segment): void {

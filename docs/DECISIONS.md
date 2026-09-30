@@ -79,3 +79,24 @@ Short log of choices made without asking. Newest at the bottom of each section.
 - **Crumbling bridge:** every bridge has one 3.8 m crumbled section (a normal gap to the sim).
   Visually the planks stay in place until the runner is 16 m away, then tumble into the chasm.
 - **Attract mode:** the menu background is the bot playing a random seed.
+
+## Pursuer, collectibles & scoring
+
+- **The Stone Warden is a distance behind the runner** (`Pursuer.gap`), not a physics body.
+  It starts 4.6 m behind and drops back out of frame (11 m); a stumble makes it lunge to 3.8 m
+  and linger there (slowly retreating) for the 4 s stumble window. `closeness` (0–1) drives the
+  camera (rises 1.5 m, pulls back 0.3 m) and, later, growl/footstep volume. The Warden model
+  is scaled so, when close, its head fills the bottom of the frame without hiding the runner
+  (measured: Warden top at 81 % screen height vs. runner's feet at 75 %).
+- **Score** = Σ(distance × multiplier) + 10 per relic coin. The multiplier grows +0.1 per 20
+  coins collected in the run (cap ×5). Surge distance counts too.
+- **Coins** come as lead-in lines, arcs that match a centered jump over barriers/gaps, low lines
+  under beams (slide), lane-hopping trails on obstacle-free straights, and a trail + arc across
+  every crumbling bridge. A placement filter guarantees no coin sits inside a pillar, on a
+  barrier, in a beam or over a pit. Coin pickup reach is 0.6 m horizontally but only 0.25 m
+  vertically, so high arc coins really need a jump.
+- **Power-ups** (8 s each): Magnet (pulls coins within 14 m ahead from every lane), Shield
+  (absorbs one obstacle hit), Surge (×1.4 speed, invulnerable, floats gaps, auto-steers corners,
+  +1 s grace). Placed in obstacle-free lead-ins, not before 150 m, at most one per ~6 segments.
+- **Coins spin in the vertex shader** (phase from instance position), so thousands of coins cost
+  zero CPU per frame; only collected or magnet-pulled coins touch instance matrices.

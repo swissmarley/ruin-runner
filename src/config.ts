@@ -59,8 +59,8 @@ export const OBSTACLE_LANE_INSET = 0.3;
 // Pursuer & failure
 export const STUMBLE_WINDOW = 4;
 export const PURSUER_FAR_GAP = 11;
-export const PURSUER_NEAR_GAP = 2.6;
-export const PURSUER_START_GAP = 3.5;
+export const PURSUER_NEAR_GAP = 3.8;
+export const PURSUER_START_GAP = 4.6;
 
 // Power-ups & scoring
 export const POWERUP_DURATION = 8;
