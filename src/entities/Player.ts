@@ -9,6 +9,8 @@ import {
   PLAYER_HEIGHT,
   PLAYER_SLIDE_HEIGHT,
   SLIDE_DURATION,
+  TILT_MAX_SPEED,
+  TILT_RANGE,
 } from '../config';
 
 export type Vertical = 'run' | 'jump' | 'slide';
@@ -49,6 +51,9 @@ export class Player {
   private laneT = 1;
   /** Lane before the most recent lane change (for bounce-back on side hits). */
   previousLane = CENTER_LANE;
+  /** Lane-free (tilt) steering: x chases `tiltTarget` instead of snapping between lanes. */
+  freeLateral = false;
+  private tiltTarget = 0;
 
   reset(): void {
     this.lane = CENTER_LANE;
@@ -58,6 +63,13 @@ export class Player {
     this.laneT = 1;
     this.vertical = 'run';
     this.actionTime = 0;
+    this.freeLateral = false;
+    this.tiltTarget = 0;
+  }
+
+  /** Lateral target for tilt steering (clamped to the track). */
+  setTiltTarget(x: number): void {
+    this.tiltTarget = x < -TILT_RANGE ? -TILT_RANGE : x > TILT_RANGE ? TILT_RANGE : x;
   }
 
   get isChangingLane(): boolean {
@@ -78,6 +90,7 @@ export class Player {
 
   /** Starts an eased move one lane over. Returns false at the track edge. */
   changeLane(dir: -1 | 1): boolean {
+    if (this.freeLateral) return false;
     const target = this.lane + dir;
     if (target < 0 || target >= LANE_COUNT) return false;
     this.previousLane = this.lane;
@@ -119,7 +132,19 @@ export class Player {
     this.prevX = this.x;
     this.prevY = this.y;
 
-    if (this.laneT < 1) {
+    if (this.freeLateral && this.laneT >= 1) {
+      const step = TILT_MAX_SPEED * dt;
+      const d = this.tiltTarget - this.x;
+      this.x += d < -step ? -step : d > step ? step : d;
+      const lane = Math.max(
+        0,
+        Math.min(LANE_COUNT - 1, Math.round(this.x / LANE_WIDTH) + CENTER_LANE),
+      );
+      if (lane !== this.lane) {
+        this.previousLane = this.lane;
+        this.lane = lane;
+      }
+    } else if (this.laneT < 1) {
       this.laneT = Math.min(1, this.laneT + dt / LANE_CHANGE_TIME);
       const target = laneToX(this.lane);
       this.x = this.fromX + (target - this.fromX) * easeOutQuad(this.laneT);

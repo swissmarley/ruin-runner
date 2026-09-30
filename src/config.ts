@@ -25,6 +25,9 @@ export const SLIDE_DURATION = 0.75;
 /** Downward speed when a slide cancels a jump (fast-fall). */
 export const FAST_FALL_SPEED = 16;
 export const INPUT_BUFFER_TIME = 0.15;
+/** Tilt steering (lane-free mode): max lateral speed and the reachable lateral range. */
+export const TILT_MAX_SPEED = 11;
+export const TILT_RANGE = LANE_WIDTH + 0.3;
 
 // Player collider (track space)
 export const PLAYER_HALF_WIDTH = 0.35;

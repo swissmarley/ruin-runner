@@ -6,6 +6,8 @@ export interface Settings {
   music: boolean;
   haptics: boolean;
   quality: QualitySetting;
+  /** Optional lane-free steering with device tilt. */
+  tilt: boolean;
 }
 
 export interface SaveState {
@@ -35,7 +37,7 @@ export function defaultSave(): SaveState {
     totalCoins: 0,
     runs: 0,
     tutorialDone: false,
-    settings: { sound: true, music: true, haptics: true, quality: 'auto' },
+    settings: { sound: true, music: true, haptics: true, quality: 'auto', tilt: false },
   };
 }
 
@@ -71,6 +73,7 @@ export function sanitize(raw: unknown): SaveState {
       music: bool(s.music, d.settings.music),
       haptics: bool(s.haptics, d.settings.haptics),
       quality,
+      tilt: bool(s.tilt, d.settings.tilt),
     },
   };
 }

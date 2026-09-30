@@ -169,3 +169,18 @@ Short log of choices made without asking. Newest at the bottom of each section.
   surface (calling `preventDefault` on `touchstart` would cancel their click on mobile).
   Outside gameplay, Enter/Space act as Play/Retry/Resume instead of being swallowed.
 - **Service worker cache** trims to 40 entries, so hashed assets from old deploys don't pile up.
+
+## Optional: tilt steering
+
+- **Off by default** (Settings → "Tilt steering (lane-free)"; only shown where
+  `DeviceOrientationEvent` exists). Turning it on calls `enable()` inside the toggle's click so
+  iOS can show its motion-permission prompt. If permission is refused, the toggle reverts to off.
+- **Lane-free mode:** the runner's `x` chases a target at up to 11 m/s. The target is the
+  left/right tilt relative to the hold angle when the run started (calibrated on Play),
+  ±22° for the full range, with a 2.5° dead zone, adjusted for screen rotation. Swipes still
+  jump, slide and turn; lateral swipes outside turn windows do nothing. Collision already works
+  with continuous `x`. A side hit bounces the runner to the lane it came from.
+- **Falls back to lanes** when the device never reports orientation (desktops), even if enabled.
+- Tilt is sampled once per rendered frame rather than queued per tick, so tilt runs are not
+  bit-reproducible from seed + inputs. This is acceptable for an optional mode; lane mode
+  stays deterministic.

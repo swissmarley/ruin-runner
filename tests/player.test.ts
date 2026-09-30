@@ -150,3 +150,41 @@ describe('slide timing', () => {
     expect(p.jump()).toBe(false);
   });
 });
+
+describe('tilt steering (lane-free mode)', () => {
+  it('chases the tilt target at a capped lateral speed', () => {
+    const p = new Player();
+    p.freeLateral = true;
+    p.setTiltTarget(2);
+    p.update(DT);
+    expect(p.x).toBeGreaterThan(0);
+    expect(p.x).toBeLessThan(0.25);
+    run(p, 0.5);
+    expect(p.x).toBeCloseTo(2);
+    expect(p.lane).toBe(2);
+  });
+
+  it('clamps the target to the track and ignores lane swipes', () => {
+    const p = new Player();
+    p.freeLateral = true;
+    p.setTiltTarget(-50);
+    run(p, 1);
+    expect(p.x).toBeGreaterThan(-LANE_WIDTH - 0.5);
+    expect(p.lane).toBe(0);
+    expect(p.changeLane(1)).toBe(false);
+  });
+
+  it('remembers the previous lane for side-hit bounce-back', () => {
+    const p = new Player();
+    p.freeLateral = true;
+    p.setTiltTarget(LANE_WIDTH);
+    run(p, 0.5);
+    expect(p.previousLane).toBe(1);
+    p.setLane(p.previousLane, false);
+    run(p, LANE_CHANGE_TIME);
+    // Bounced back to the previous lane; tilt steering takes over again afterwards.
+    expect(Math.abs(p.x)).toBeLessThan(0.3);
+    run(p, 0.5);
+    expect(p.x).toBeCloseTo(LANE_WIDTH);
+  });
+});

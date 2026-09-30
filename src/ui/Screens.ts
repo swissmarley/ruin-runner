@@ -51,6 +51,11 @@ export class Screens {
     });
   }
 
+  /** Re-syncs the settings controls (e.g. after an async permission was refused). */
+  refreshSettings(): void {
+    this.settings.render(this.save().settings);
+  }
+
   get settingsOpen(): boolean {
     return this.settings.visible;
   }

@@ -33,7 +33,13 @@ describe('SaveData', () => {
     expect(b.state.bestDistance).toBe(800);
     expect(b.state.runs).toBe(1);
     expect(b.state.tutorialDone).toBe(true);
-    expect(b.state.settings).toEqual({ sound: true, music: false, haptics: true, quality: 'low' });
+    expect(b.state.settings).toEqual({
+      sound: true,
+      music: false,
+      haptics: true,
+      quality: 'low',
+      tilt: false,
+    });
   });
 
   it('keeps the best score and accumulates coins across runs', () => {
@@ -63,7 +69,13 @@ describe('SaveData', () => {
     expect(s.totalCoins).toBe(77);
     expect(s.runs).toBe(0);
     expect(s.tutorialDone).toBe(false);
-    expect(s.settings).toEqual({ sound: false, music: true, haptics: true, quality: 'auto' });
+    expect(s.settings).toEqual({
+      sound: false,
+      music: true,
+      haptics: true,
+      quality: 'auto',
+      tilt: false,
+    });
   });
 
   it('keeps working when storage throws (private mode, quota)', () => {

@@ -85,6 +85,8 @@ docs/DECISIONS.md      design decisions log
 - [x] **M7 UI, persistence, PWA** — menu/HUD/settings, save data, tutorial, installable PWA
 - [x] **M8 Polish & perf** — adaptive quality, debug overlay, throttled profiling, README
 
+- [x] **Optional: tilt steering** — lane-free mode via device orientation (setting, off by default)
+
 ## Verification log
 
 - M1: `npm run check` green; dev server renders the spinning cube.
@@ -117,3 +119,6 @@ docs/DECISIONS.md      design decisions log
   run: 0 console errors/warnings, 29 geometries/2 textures constant, heap flat after forced GC
   (56.17→56.23 MB); touch-only E2E at 390×844 (tap Play → 24 swipes, 60 s flawless → death →
   tap Retry). Not verified: real phones, true CPU throttling (no DevTools protocol access).
+- Tilt: Player free-lateral unit tests; browser: permission denial reverts the toggle; with
+  permission stubbed, synthetic `deviceorientation` (γ 20° / −25°) steers x to +2.0 / −2.5 m
+  and lateral swipes no longer change lanes. Real-device tilt feel not verified.

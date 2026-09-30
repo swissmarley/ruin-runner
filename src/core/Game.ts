@@ -1,6 +1,7 @@
 import { AudioManager } from '../audio/AudioManager';
 import { DT, MAX_STEPS_PER_FRAME } from '../config';
 import { InputManager } from '../input/InputManager';
+import { TiltInput } from '../input/TiltInput';
 import { GameView } from '../render/GameView';
 import { Bot } from '../sim/Bot';
 import type { Dir } from '../sim/InputBuffer';
@@ -25,6 +26,7 @@ export class Game {
   readonly save = new SaveData();
   readonly audio = new AudioManager();
   readonly haptics = new Haptics();
+  readonly tilt = new TiltInput();
   private readonly view: GameView;
   private readonly screens: Screens;
   private readonly feedback: Feedback;
@@ -63,7 +65,10 @@ export class Game {
     this.driver = new RafDriver((dt) => this.frame(dt));
     this.applySettings(this.save.state.settings);
     // Mobile browsers only allow audio to start inside a user gesture.
-    const unlock = (): void => this.audio.unlock();
+    const unlock = (): void => {
+      this.audio.unlock();
+      if (this.save.state.settings.tilt) void this.tilt.enable();
+    };
     for (const type of ['pointerdown', 'touchend', 'keydown']) {
       window.addEventListener(type, unlock, { capture: true, passive: true });
     }
@@ -85,6 +90,10 @@ export class Game {
     this.autopilot = false;
     this.tutorialRun = !this.save.state.tutorialDone;
     this.resetRun(seed, this.tutorialRun);
+    // Lane-free tilt steering only when enabled *and* the device actually reports tilt.
+    const tilt = this.save.state.settings.tilt && this.tilt.active;
+    this.sim.player.freeLateral = tilt;
+    if (tilt) this.tilt.calibrate();
     this.states.go('Playing');
   }
 
@@ -108,6 +117,16 @@ export class Game {
     this.save.updateSettings(patch);
     this.applySettings(this.save.state.settings);
     this.audio.play('click');
+    if (patch.tilt === true) {
+      // Called inside the toggle's click, so iOS can show its motion-permission prompt.
+      void this.tilt.enable().then((ok) => {
+        if (ok) return;
+        this.save.updateSettings({ tilt: false });
+        this.screens.refreshSettings();
+      });
+    } else if (patch.tilt === false) {
+      this.tilt.disable();
+    }
   }
 
   private applySettings(s: Settings): void {
@@ -174,6 +193,7 @@ export class Game {
     this.view.frameStats(dt);
     this.audio.update(dt, this.sim.pursuer.closeness, audible && this.sim.alive);
     if (state === 'Playing') {
+      if (this.sim.player.freeLateral) this.sim.player.setTiltTarget(this.tilt.target());
       this.screens.updateHud(this.sim);
       if (this.tutorialRun && this.sim.s > this.sim.generator.tutorialEndS) {
         this.tutorialRun = false;

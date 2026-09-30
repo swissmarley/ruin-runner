@@ -46,6 +46,10 @@ Swipes register mid-gesture (after 30 px), and one input is buffered for 150 ms,
 swipe still counts. A first run starts with an in-world tutorial, which you can replay from
 Settings.
 
+**Tilt steering (optional):** in Settings, turn on "Tilt steering (lane-free)" to steer by
+tilting the phone. Lanes go away; swipes still jump, slide and turn. The angle you hold the
+phone at when a run starts counts as straight ahead.
+
 ## Gameplay rules
 
 - Speed ramps smoothly from 8 m/s to 22 m/s over about 3 minutes.

@@ -1,3 +1,4 @@
+import { TiltInput } from '../input/TiltInput';
 import type { QualitySetting, Settings as SettingsState } from '../storage/SaveData';
 import { QUALITY_SETTINGS } from '../storage/SaveData';
 import { button, el, Overlay } from './dom';
@@ -15,7 +16,7 @@ const QUALITY_LABEL: Record<QualitySetting, string> = {
   high: 'High',
 };
 
-type ToggleKey = 'sound' | 'music' | 'haptics';
+type ToggleKey = 'sound' | 'music' | 'haptics' | 'tilt';
 
 /** Sound, music, haptics and graphics quality, plus a tutorial replay. */
 export class Settings extends Overlay {
@@ -34,6 +35,8 @@ export class Settings extends Overlay {
       this.toggleRow('music', 'Music', actions),
       this.toggleRow('haptics', vibrate ? 'Haptics' : 'Haptics (not supported here)', actions),
     );
+    if (TiltInput.supported)
+      list.append(this.toggleRow('tilt', 'Tilt steering (lane-free)', actions));
     const qualityRow = el('div', 'setting-row');
     qualityRow.append(el('span', '', 'Graphics'));
     const seg = el('div', 'segmented');
