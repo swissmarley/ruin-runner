@@ -18,10 +18,10 @@ export const PRESETS: Record<QualityLevel, QualityPreset> = {
 };
 
 /** Applies a quality level to the renderer (pixel ratio capped by the device and at 2). */
-export function applyQuality(renderer: Renderer, level: QualityLevel): void {
+export function applyQuality(renderer: Renderer, level: QualityLevel, pixelScale = 1): void {
   const preset = PRESETS[level];
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  renderer.setPixelRatio(Math.min(dpr, preset.maxPixelRatio));
+  renderer.setPixelRatio(Math.min(dpr, preset.maxPixelRatio) * pixelScale);
   renderer.setShadows(preset.shadows, preset.shadowMapSize);
   renderer.setFogFar(preset.fogFar);
 }

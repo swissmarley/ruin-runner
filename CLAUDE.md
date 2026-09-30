@@ -25,6 +25,9 @@ type/config glue: `@types/three`, `@eslint/js`, `typescript-eslint`). Ask before
 | `npm run test`    | Vitest once (`npm run test:watch` to watch)       |
 | `npm run format`  | Prettier write                                    |
 
+Dev-only test hooks: `window.__game` (dev builds only) exposes the game; `__game.debugAdvance(s)`
+steps frames synchronously; `__game.autopilot = true` lets the bot play.
+
 npm note: the user's `~/.npm` cache has permission issues; if installs fail with EACCES/EEXIST,
 set `npm_config_cache` to a scratch dir.
 
@@ -80,7 +83,7 @@ docs/DECISIONS.md      design decisions log
 - [x] **M5 Pursuer, coins, power-ups, scoring** — Magnet/Shield/Surge (8 s), difficulty ramp
 - [x] **M6 Art & audio** — low-poly ruins, fog/lighting, particles, procedural SFX + music
 - [x] **M7 UI, persistence, PWA** — menu/HUD/settings, save data, tutorial, installable PWA
-- [ ] **M8 Polish & perf** — adaptive quality, debug overlay, throttled profiling, README
+- [x] **M8 Polish & perf** — adaptive quality, debug overlay, throttled profiling, README
 
 ## Verification log
 
@@ -108,3 +111,9 @@ docs/DECISIONS.md      design decisions log
   ratio 1, shadows off on Low); tutorial signs visible (touch wording at 390×844). Preview
   build: SW activated + controlling, manifest/icons served, shell + hashed assets cached
   (offline-ready); bundle 167 KB gzip.
+- M8: AdaptiveQuality unit tests (step down/up, hitch immunity, vsync-capped recovery,
+  anti-oscillation backoff). Browser: JS 0.47 ms/frame avg (p95 1.3), GPU-synced 3.8 ms;
+  simulated 30 FPS → high→medium→low→0.85×→0.7×, then 60 FPS → back to high; 5-min autopilot
+  run: 0 console errors/warnings, 29 geometries/2 textures constant, heap flat after forced GC
+  (56.17→56.23 MB); touch-only E2E at 390×844 (tap Play → 24 swipes, 60 s flawless → death →
+  tap Retry). Not verified: real phones, true CPU throttling (no DevTools protocol access).

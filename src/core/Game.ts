@@ -57,6 +57,7 @@ export class Game {
       onDirection: (dir) => this.onDirection(dir),
       onPause: () => this.togglePause(),
       onDebugToggle: () => this.view.toggleDebug(),
+      onConfirm: () => this.onConfirm(),
     });
     this.states.onChange((to) => this.onStateChange(to));
     this.driver = new RafDriver((dt) => this.frame(dt));
@@ -143,6 +144,12 @@ export class Game {
     this.audio.setMusicMode(to === 'Playing' ? 'run' : 'menu');
   }
 
+  private onConfirm(): void {
+    const state = this.states.state;
+    if ((state === 'Menu' && !this.screens.settingsOpen) || state === 'GameOver') this.play();
+    else if (state === 'Paused') this.togglePause();
+  }
+
   private onDirection(dir: Dir): void {
     if (this.states.state === 'Playing' && !this.autopilot) this.sim.pushInput(dir);
   }
@@ -164,7 +171,7 @@ export class Game {
       if (!this.sim.alive) this.afterDeath(dt, state);
     }
     if (this.view.draw(running ? dt : 0, alpha)) this.feedback.crumble(audible);
-    this.view.debugTick(dt);
+    this.view.frameStats(dt);
     this.audio.update(dt, this.sim.pursuer.closeness, audible && this.sim.alive);
     if (state === 'Playing') {
       this.screens.updateHud(this.sim);

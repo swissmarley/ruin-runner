@@ -1,5 +1,12 @@
 /* Ruin Runner service worker: offline-first shell + runtime caching of hashed assets. */
 const VERSION = 'rr-v1';
+/** Hashed assets from older deploys are trimmed once the cache grows past this. */
+const MAX_ENTRIES = 40;
+
+async function trim(cache) {
+  const keys = await cache.keys();
+  for (let i = 0; i < keys.length - MAX_ENTRIES; i++) await cache.delete(keys[i]);
+}
 const SHELL = [
   './',
   './index.html',
@@ -54,7 +61,7 @@ self.addEventListener('fetch', (event) => {
         fetch(req).then((res) => {
           if (res.ok && res.type === 'basic') {
             const copy = res.clone();
-            caches.open(VERSION).then((c) => c.put(req, copy));
+            caches.open(VERSION).then((c) => c.put(req, copy).then(() => trim(c)));
           }
           return res;
         }),

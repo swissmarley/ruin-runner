@@ -1,6 +1,9 @@
 import { Game } from './core/Game';
 import { registerServiceWorker } from './pwa';
-import './ui/styles.css';
+import './ui/styles/base.css';
+import './ui/styles/overlays.css';
+import './ui/styles/hud.css';
+import './ui/styles/settings.css';
 
 const container = document.getElementById('app');
 if (!container) throw new Error('Missing #app container');

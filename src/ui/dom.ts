@@ -18,7 +18,9 @@ export function button(label: string, className: string, onClick: () => void): H
     e.stopPropagation();
     onClick();
   });
+  // Keep presses on UI controls from starting a swipe on the game surface.
   b.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+  b.addEventListener('mousedown', (e) => e.stopPropagation());
   return b;
 }
 

@@ -15,6 +15,7 @@ import { Materials } from './Materials';
 import { ObstacleView } from './ObstacleView';
 import { PlayerView } from './PlayerView';
 import { PursuerView } from './PursuerView';
+import { AdaptiveQuality } from './AdaptiveQuality';
 import type { QualityLevel } from './Quality';
 import { applyQuality, initialLevel } from './Quality';
 import { Renderer } from './Renderer';
@@ -42,6 +43,7 @@ export class GameView {
   private readonly hints = new HintView();
   private readonly debug: DebugOverlay;
   private quality: QualityLevel = 'high';
+  private readonly adaptive = new AdaptiveQuality('high');
   /** True when the player chose "Auto" quality (the adaptive controller may change it). */
   autoQuality = true;
   private readonly cameraRig: CameraRig;
@@ -88,12 +90,14 @@ export class GameView {
 
   setQuality(setting: QualitySetting): void {
     this.autoQuality = setting === 'auto';
-    this.setQualityLevel(initialLevel(setting));
+    const level = initialLevel(setting);
+    this.adaptive.reset(level);
+    this.setQualityLevel(level);
   }
 
-  setQualityLevel(level: QualityLevel): void {
+  setQualityLevel(level: QualityLevel, pixelScale = 1): void {
     this.quality = level;
-    applyQuality(this.renderer, level);
+    applyQuality(this.renderer, level, pixelScale);
   }
 
   get qualityLevel(): QualityLevel {
@@ -209,22 +213,26 @@ export class GameView {
     return crumbled;
   }
 
-  /** Feeds the debug overlay with real (unscaled) frame time. */
-  debugTick(realDt: number): void {
+  /** Per-frame bookkeeping with the real frame time: adaptive quality and debug overlay. */
+  frameStats(realDt: number): void {
+    if (this.autoQuality && this.adaptive.sample(realDt)) {
+      const st = this.adaptive.state;
+      this.setQualityLevel(st.level, st.pixelScale);
+    }
     this.debug.tick(realDt, this.debugStats);
   }
 
   private readonly debugStats = () => {
     const info = this.renderer.gl.info.render;
     return {
-      fps: 0,
-      frameMs: 0,
       calls: info.calls,
       triangles: info.triangles,
       segments: this.sim.pool.count,
       speed: this.sim.speed,
       seed: this.sim.seed,
-      quality: this.autoQuality ? `auto:${this.quality}` : this.quality,
+      quality: this.autoQuality
+        ? `auto:${this.quality} (${(this.adaptive.averageFrameTime * 1000).toFixed(1)} ms)`
+        : this.quality,
       pixelRatio: this.renderer.getPixelRatio(),
     };
   };

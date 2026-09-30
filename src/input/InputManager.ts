@@ -5,6 +5,8 @@ export interface InputHandlers {
   onDirection(dir: Dir): void;
   onPause(): void;
   onDebugToggle(): void;
+  /** Enter / Space outside of gameplay (Play from the menu, Retry after a run). */
+  onConfirm(): void;
 }
 
 const KEY_MAP: Record<string, Dir> = {
@@ -79,6 +81,8 @@ export class InputManager {
   }
 
   private readonly onTouchStart = (e: TouchEvent): void => {
+    // Let taps on UI controls through untouched (preventDefault would cancel their click).
+    if (isUiControl(e.target)) return;
     if (e.touches.length >= 3) {
       this.handlers.onDebugToggle();
       this.swipe.cancel();
@@ -104,7 +108,7 @@ export class InputManager {
       const t = e.changedTouches[i]!;
       this.emit(this.swipe.end(t.identifier, t.clientX, t.clientY));
     }
-    e.preventDefault();
+    if (!isUiControl(e.target)) e.preventDefault();
   };
 
   private readonly onTouchCancel = (): void => {
@@ -112,6 +116,7 @@ export class InputManager {
   };
 
   private readonly onMouseDown = (e: MouseEvent): void => {
+    if (isUiControl(e.target)) return;
     this.mouseDown = true;
     this.swipe.start(-2, e.clientX, e.clientY);
   };
@@ -136,6 +141,15 @@ export class InputManager {
       return;
     }
     const dir = KEY_MAP[e.code];
+    if (!this.enabled) {
+      // Outside gameplay, Enter/Space confirm unless a focused control will handle them.
+      const onControl = (e.target as HTMLElement | null)?.closest?.('button');
+      if ((e.code === 'Enter' || e.code === 'Space') && !onControl && !e.repeat) {
+        e.preventDefault();
+        this.handlers.onConfirm();
+      }
+      return;
+    }
     if (!dir) return;
     e.preventDefault();
     if (!e.repeat) this.emit(dir);
@@ -144,6 +158,11 @@ export class InputManager {
   private emit(dir: Dir | null): void {
     if (dir !== null && this.enabled) this.handlers.onDirection(dir);
   }
+}
+
+function isUiControl(target: EventTarget | null): boolean {
+  const el = target as Element | null;
+  return !!el?.closest?.('button, input, select, a');
 }
 
 function prevent(e: Event): void {

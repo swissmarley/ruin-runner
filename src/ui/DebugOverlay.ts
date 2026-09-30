@@ -1,8 +1,6 @@
 import { el } from './dom';
 
 export interface DebugStats {
-  fps: number;
-  frameMs: number;
   calls: number;
   triangles: number;
   segments: number;

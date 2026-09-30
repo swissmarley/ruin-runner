@@ -1,0 +1,162 @@
+/* ---------- Overlay UI ---------- */
+.ui-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-size: 16px;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(16px + var(--safe-top)) calc(16px + var(--safe-right))
+    calc(16px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  pointer-events: auto;
+  transition: opacity 0.18s ease;
+  opacity: 1;
+}
+
+.overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.card {
+  width: min(360px, 100%);
+  background: var(--panel);
+  border: 1px solid rgba(242, 193, 78, 0.35);
+  border-radius: 18px;
+  padding: 24px 20px;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.btn {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 14px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.btn.primary {
+  background: linear-gradient(180deg, #f08a3c, #c95221);
+  box-shadow: 0 4px 0 #7a2e10;
+}
+
+.btn.secondary {
+  background: rgba(255, 246, 230, 0.12);
+}
+
+.btn.big {
+  min-height: 60px;
+  font-size: 22px;
+}
+
+.btn:active {
+  transform: translateY(2px);
+}
+
+.btn:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.logo {
+  margin: 0 0 6px;
+  line-height: 0.9;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.logo-top,
+.logo-bottom {
+  display: block;
+}
+
+.logo-top {
+  font-size: 44px;
+  color: var(--gold);
+  text-shadow: 0 3px 0 #7a4a10;
+}
+
+.logo-bottom {
+  font-size: 34px;
+  color: var(--ink);
+}
+
+.tagline,
+.controls-hint {
+  margin: 8px 0 12px;
+  color: var(--ink-dim);
+  font-size: 14px;
+}
+
+.records,
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.record,
+.stat {
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+  padding: 8px;
+}
+
+.record span,
+.stat span {
+  display: block;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-dim);
+}
+
+.record b,
+.stat b {
+  font-size: 22px;
+  color: var(--gold);
+}
+
+.go-title {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #3a2408;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.badge.hidden {
+  display: none;
+}
+
+.buttons {
+  margin-top: 8px;
+}
