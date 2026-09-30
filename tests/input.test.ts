@@ -61,10 +61,10 @@ describe('Simulation input buffering', () => {
     for (let i = 0; i < ticks; i++) sim.step(DT);
     sim.pushInput('UP');
     sim.step(DT);
-    expect(sim.buffer.dir).toBe('UP');
+    expect(sim.controls.buffer.dir).toBe('UP');
     for (let i = 0; i < Math.round(0.12 / DT); i++) sim.step(DT);
     expect(sim.player.vertical).toBe('jump');
-    expect(sim.buffer.dir).toBeNull();
+    expect(sim.controls.buffer.dir).toBeNull();
   });
 
   it('drops a jump pressed too early', () => {
@@ -74,7 +74,7 @@ describe('Simulation input buffering', () => {
     sim.pushInput('UP');
     const ticks = Math.round((INPUT_BUFFER_TIME + 0.05) / DT);
     for (let i = 0; i < ticks; i++) sim.step(DT);
-    expect(sim.buffer.dir).toBeNull();
+    expect(sim.controls.buffer.dir).toBeNull();
     for (let i = 0; i < Math.round(JUMP_DURATION / DT); i++) sim.step(DT);
     expect(sim.player.vertical).toBe('run');
   });

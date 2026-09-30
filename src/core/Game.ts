@@ -1,73 +1,79 @@
 import { DT, MAX_STEPS_PER_FRAME } from '../config';
 import { InputManager } from '../input/InputManager';
-import { CameraRig } from '../render/CameraRig';
-import { Materials } from '../render/Materials';
-import { PlayerView } from '../render/PlayerView';
-import { Renderer } from '../render/Renderer';
-import { TurnBlend } from '../render/TurnBlend';
-import { WorldView } from '../render/WorldView';
+import { GameView } from '../render/GameView';
 import { Bot } from '../sim/Bot';
 import type { Dir } from '../sim/InputBuffer';
 import { Simulation } from '../sim/Simulation';
+import { GameOver } from '../ui/GameOver';
+import { Menu } from '../ui/Menu';
 import { FixedStepLoop, RafDriver } from './GameLoop';
 import { randomSeed } from './Rng';
+import type { GameState } from './StateMachine';
 import { StateMachine } from './StateMachine';
 
-/** Top-level glue: state machine, fixed-step loop, simulation, views and input. */
+/** Seconds of death animation before the Game Over card appears. */
+const DEATH_DELAY = 1.0;
+
+/** Top-level glue: state machine, fixed-step loop, simulation, view, input and UI. */
 export class Game {
   readonly states = new StateMachine();
   readonly sim: Simulation;
-  private readonly renderer: Renderer;
-  private readonly materials = new Materials();
-  private readonly world: WorldView;
-  private readonly playerView: PlayerView;
-  private readonly cameraRig: CameraRig;
-  private readonly blend = new TurnBlend();
+  private readonly view: GameView;
   private readonly loop = new FixedStepLoop(DT, MAX_STEPS_PER_FRAME);
   private readonly driver: RafDriver;
   private readonly input: InputManager;
   private readonly bot: Bot;
+  private readonly menu: Menu;
+  private readonly gameOver: GameOver;
   /** When true the perfect-play bot drives the runner (attract mode / smoke tests). */
   autopilot = false;
+  private deathTimer = 0;
+  private best = 0;
 
   constructor(container: HTMLElement) {
     this.sim = new Simulation(randomSeed());
     this.bot = new Bot(this.sim);
-    this.renderer = new Renderer(container);
-    this.world = new WorldView(this.materials, this.sim.pool.capacity);
-    this.playerView = new PlayerView(this.materials);
-    this.cameraRig = new CameraRig(this.renderer.camera);
-    this.renderer.scene.add(this.world.group, this.playerView.root);
-
+    this.view = new GameView(container, this.sim);
+    const ui = document.createElement('div');
+    ui.className = 'ui-layer';
+    container.appendChild(ui);
+    this.menu = new Menu(ui, {
+      onPlay: () => this.play(),
+      onSettings: () => {},
+    });
+    this.gameOver = new GameOver(ui, {
+      onRetry: () => this.play(),
+      onMenu: () => this.toMenu(),
+    });
     this.input = new InputManager(container, {
       onDirection: (dir) => this.onDirection(dir),
       onPause: () => this.togglePause(),
       onDebugToggle: () => {},
     });
-
-    window.addEventListener('resize', () => this.renderer.resize());
+    this.states.onChange((to, from) => this.onStateChange(to, from));
     this.driver = new RafDriver((dt) => this.frame(dt));
-    this.states.go('Menu');
   }
 
   start(): void {
     this.driver.start();
-    this.newRun();
+    this.startAttract();
+    this.states.go('Menu');
   }
 
-  newRun(seed: number = randomSeed()): void {
-    this.sim.reset(seed);
-    this.bot.reset();
-    this.world.invalidate();
-    this.blend.reset(0);
-    this.cameraRig.reset();
-    this.playerView.resetPose();
-    this.loop.reset();
+  /** Starts a fresh player-controlled run (also used for instant Retry). */
+  play(seed: number = randomSeed()): void {
+    this.autopilot = false;
+    this.resetRun(seed);
     this.states.go('Playing');
   }
 
+  toMenu(): void {
+    this.startAttract();
+    this.states.go('Menu');
+  }
+
   togglePause(): void {
-    if (this.states.state === 'Playing') this.states.go('Paused');
+    if (this.states.state === 'Playing' && this.sim.alive) this.states.go('Paused');
     else if (this.states.state === 'Paused') this.states.go('Playing');
   }
 
@@ -77,8 +83,28 @@ export class Game {
     for (let i = 0; i < frames; i++) this.frame(1 / 60);
   }
 
+  private startAttract(): void {
+    this.autopilot = true;
+    this.resetRun(randomSeed());
+  }
+
+  private resetRun(seed: number): void {
+    this.sim.reset(seed);
+    this.bot.reset();
+    this.view.reset();
+    this.loop.reset();
+    this.deathTimer = 0;
+  }
+
+  private onStateChange(to: GameState, _from: GameState): void {
+    this.menu.root.classList.toggle('hidden', to !== 'Menu');
+    if (to !== 'GameOver') this.gameOver.hide();
+    this.input.setEnabled(to === 'Playing');
+    if (to === 'Menu') this.menu.setRecords(this.best, 0);
+  }
+
   private onDirection(dir: Dir): void {
-    if (this.states.state === 'Playing') this.sim.pushInput(dir);
+    if (this.states.state === 'Playing' && !this.autopilot) this.sim.pushInput(dir);
   }
 
   private readonly stepSim = (dt: number): void => {
@@ -88,39 +114,41 @@ export class Game {
 
   private frame(dt: number): void {
     this.input.pollGamepads();
+    const state = this.states.state;
+    const running = state === 'Playing' || state === 'Menu';
     let alpha = 1;
-    if (this.states.state === 'Playing') {
+    if (running) {
       alpha = this.loop.advance(dt, this.stepSim);
       this.drainEvents();
+      if (!this.sim.alive) this.afterDeath(dt, state);
     }
-    this.draw(this.states.state === 'Playing' ? dt : 0, alpha);
+    this.view.draw(running ? dt : 0, alpha);
+  }
+
+  private afterDeath(dt: number, state: GameState): void {
+    this.deathTimer += dt;
+    if (this.deathTimer < DEATH_DELAY) return;
+    if (state === 'Menu') {
+      this.startAttract();
+      return;
+    }
+    const score = Math.floor(this.sim.distance);
+    const newBest = score > this.best;
+    this.best = Math.max(this.best, score);
+    this.states.go('GameOver');
+    this.gameOver.present({
+      cause: this.sim.deathCause,
+      score,
+      best: this.best,
+      newBest,
+      coins: 0,
+      distance: this.sim.distance,
+    });
   }
 
   private drainEvents(): void {
     const ev = this.sim.events;
-    for (let i = 0; i < ev.count; i++) {
-      if (ev.types[i] === 'turn') {
-        this.blend.start(this.sim.frame.heading, this.sim.turnOffsetX, this.sim.turnOffsetZ);
-      }
-    }
+    for (let i = 0; i < ev.count; i++) this.view.onEvent(ev.types[i]!);
     ev.clear();
-  }
-
-  private draw(dt: number, alpha: number): void {
-    const sim = this.sim;
-    const p = sim.player;
-    this.blend.update(dt);
-    const px = sim.prevPx + (sim.px - sim.prevPx) * alpha + this.blend.offsetX;
-    const pz = sim.prevPz + (sim.pz - sim.prevPz) * alpha + this.blend.offsetZ;
-    const py = p.prevY + (p.y - p.prevY) * alpha;
-    const lateral = p.prevX + (p.x - p.prevX) * alpha;
-
-    this.world.update(sim.pool);
-    this.playerView.root.position.set(px, py, pz);
-    this.playerView.root.rotation.y = this.blend.yaw;
-    this.playerView.update(dt, p, sim.speed, sim.alive);
-    this.cameraRig.update(dt, px, py, pz, this.blend.yaw, lateral, 0);
-    this.renderer.followSun(px, pz);
-    this.renderer.render();
   }
 }

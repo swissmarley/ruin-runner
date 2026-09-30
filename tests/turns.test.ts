@@ -21,7 +21,7 @@ describe('turns', () => {
     const heading = sim.frame.heading;
     advanceUntil(sim, () => sim.s >= turnWindowStart(corner, sim.speed) + 1);
     sim.pushInput(dirOf(corner));
-    advanceUntil(sim, () => sim.lastTurnedId === corner.id, 5);
+    advanceUntil(sim, () => sim.controls.lastTurnedId === corner.id, 5);
     expect(sim.alive).toBe(true);
     expect(sim.frame.heading).toBe(corner.exitHeading);
     expect(sim.frame.heading).not.toBe(heading);
@@ -33,11 +33,11 @@ describe('turns', () => {
     advanceUntil(sim, () => sim.s >= turnWindowStart(corner, sim.speed));
     sim.pushInput(dirOf(corner));
     sim.step(DT);
-    expect(sim.queuedTurnId).toBe(corner.id);
-    expect(sim.lastTurnedId).not.toBe(corner.id);
+    expect(sim.controls.queuedTurnId).toBe(corner.id);
+    expect(sim.controls.lastTurnedId).not.toBe(corner.id);
     advanceUntil(sim, () => sim.s >= corner.pivotS);
     sim.step(DT);
-    expect(sim.lastTurnedId).toBe(corner.id);
+    expect(sim.controls.lastTurnedId).toBe(corner.id);
   });
 
   it('buffers a turn swiped just before the window opens', () => {
@@ -47,7 +47,9 @@ describe('turns', () => {
     sim.step(DT);
     expect(sim.player.lane).toBe(1); // not consumed as a lane change
     advance(sim, 0.2);
-    expect(sim.queuedTurnId === corner.id || sim.lastTurnedId === corner.id).toBe(true);
+    expect(sim.controls.queuedTurnId === corner.id || sim.controls.lastTurnedId === corner.id).toBe(
+      true,
+    );
   });
 
   it('ends the run when the player never turns', () => {
@@ -80,8 +82,8 @@ describe('turns', () => {
     const { sim, corner } = setup();
     advanceUntil(sim, () => sim.s >= corner.startS);
     sim.pushInput(dirOf(corner));
-    advanceUntil(sim, () => !sim.alive || sim.lastTurnedId === corner.id, 3);
-    expect(sim.lastTurnedId).toBe(corner.id);
+    advanceUntil(sim, () => !sim.alive || sim.controls.lastTurnedId === corner.id, 3);
+    expect(sim.controls.lastTurnedId).toBe(corner.id);
     expect(Number.isFinite(sim.turnOffsetX)).toBe(true);
     expect(Number.isFinite(sim.turnOffsetZ)).toBe(true);
   });

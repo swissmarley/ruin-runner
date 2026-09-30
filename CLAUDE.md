@@ -76,7 +76,7 @@ docs/DECISIONS.md      design decisions log
 - [x] **M1 Scaffold** — Vite + TS strict + ESLint + Prettier + Vitest, spinning cube, `npm run check`
 - [x] **M2 Running core** — auto-run, 3 lanes, jump/slide, chase cam, fixed-step loop, input
 - [x] **M3 Procedural track** — segment pool, seeded gen, turns + windows, 10-min bot sim
-- [ ] **M4 Obstacles & death** — patterns, collision, stumble/death, game over + instant retry
+- [x] **M4 Obstacles & death** — patterns, collision, stumble/death, game over + instant retry
 - [ ] **M5 Pursuer, coins, power-ups, scoring** — Magnet/Shield/Surge (8 s), difficulty ramp
 - [ ] **M6 Art & audio** — low-poly ruins, fog/lighting, particles, procedural SFX + music
 - [ ] **M7 UI, persistence, PWA** — menu/HUD/settings, save data, tutorial, installable PWA
@@ -93,3 +93,7 @@ docs/DECISIONS.md      design decisions log
   1000 seeds × 25 s at top speed; 10-minute headless run alive with pool ≤ 28 and heap growth
   < 1 MB after forced GC. Browser: autopilot (`__game.autopilot = true`) turns corners with
   smooth camera blend.
+- M4: 34 templates validated at 5 speeds; collision unit tests (low/beam/pillar head-on + side,
+  gap + edge grace, shield, surge, 2-stumble catch); bot beats 1000 + 1000 seeds with zero
+  stumbles while performing thousands of jumps/slides/lane changes. Browser: Menu → Play →
+  death → Game Over card → Retry resets in < 1 ms (+1 frame).

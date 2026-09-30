@@ -57,3 +57,25 @@ Short log of choices made without asking. Newest at the bottom of each section.
   without turning is a fatal "missed turn".
 - **No bridge directly after a corner, no corner directly after a corner**, and at least two
   straights at the start of every run.
+
+## Obstacles & failure
+
+- **Patterns are authored in time slots** (`SLOT_TIME` = 1.15 s), converted to meters with the
+  generation-time speed estimate, so a template is equally fair at 8 m/s and 22 m/s.
+- **Solvability is proven twice:** `PatternValidator` (DP over lanes with explicit timing for
+  lane changes, jump→jump, jump→slide fast-fall, slide→jump) is unit-tested for every template
+  at every speed, and the bot — which uses the same timing function — beats 2000 generated runs
+  without a single stumble. At least one slot of rest before every pattern guarantees any
+  cross-pattern transition is feasible.
+- **Hit rules:** low barrier → stumble; overhead beam → fatal; pillar head-on → fatal; steering
+  into a pillar's side → stumble + bounce back to the previous lane; standing over a gap →
+  fatal fall (0.25 m edge grace); wrong/missed turn → fatal. A second stumble within 4 s means
+  the Stone Warden catches you.
+- **Shield** absorbs one obstacle hit (stumble or fatal) but not falls or missed turns.
+  **Surge** smashes through obstacles, floats over gaps and auto-steers corners; 1 s of grace
+  invulnerability follows it.
+- **Obstacles are inset 0.3 m from lane edges** so clipping a neighbouring lane mid-change is
+  forgiven.
+- **Crumbling bridge:** every bridge has one 3.8 m crumbled section (a normal gap to the sim).
+  Visually the planks stay in place until the runner is 16 m away, then tumble into the chasm.
+- **Attract mode:** the menu background is the bot playing a random seed.

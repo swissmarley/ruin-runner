@@ -1,8 +1,24 @@
-import { CORNER_SIZE } from '../config';
+import {
+  CORNER_SIZE,
+  CRUMBLE_GAP_LENGTH,
+  INPUT_BUFFER_TIME,
+  TURN_WINDOW_LEAD_TIME,
+  TURN_WINDOW_MIN_LEAD,
+} from '../config';
 import { Rng } from '../core/Rng';
-import { cornerChanceAt, difficultyAt, speedAt, timeAtDistance } from '../systems/Difficulty';
+import {
+  cornerChanceAt,
+  difficultyAt,
+  patternChanceAt,
+  restSlotsAt,
+  speedAt,
+  tierAt,
+  timeAtDistance,
+} from '../systems/Difficulty';
+import { patternSpan, SLOT_TIME } from './ObstaclePatterns';
+import { PatternPicker, placeCrumble, placePattern } from './PatternPlacer';
 import type { Segment, SegmentKind } from './Segment';
-import { TILE_LENGTH } from './Segment';
+import { MAX_SEGMENT_LENGTH, TILE_LENGTH } from './Segment';
 import type { SegmentPool } from './SegmentPool';
 
 /** The first segment starts behind the player so the camera never sees the track's end. */
@@ -11,6 +27,13 @@ const START_STRAIGHTS = 2;
 const MIN_STRAIGHTS_BETWEEN_CORNERS = 1;
 const BRIDGE_MIN_GAP = 5;
 const BRIDGE_LENGTH_TILES = [10, 11, 12];
+const MIN_STRAIGHT_TILES = 4;
+/** Extra meters after a pattern's last row center (covers the deepest obstacle). */
+const PATTERN_TAIL = 2;
+
+function roundUpToTiles(meters: number): number {
+  return Math.ceil(meters / TILE_LENGTH) * TILE_LENGTH;
+}
 
 /** Snapshot of generation-time difficulty for one segment. */
 export interface GenContext {
@@ -39,6 +62,7 @@ export class TrackGenerator {
   private segmentsSinceBridge = 0;
   private emitted = 0;
   private cornerNext = false;
+  private readonly picker = new PatternPicker();
   private readonly ctx: GenContext = { difficulty: 0, speed: 0, cornerNext: false };
 
   constructor(seed: number) {
@@ -56,6 +80,7 @@ export class TrackGenerator {
     this.segmentsSinceBridge = 0;
     this.emitted = 0;
     this.cornerNext = false;
+    this.picker.reset();
   }
 
   /** Path distance where the next generated segment will start. */
@@ -100,17 +125,42 @@ export class TrackGenerator {
       this.emitted >= START_STRAIGHTS &&
       this.straightsSinceCorner >= MIN_STRAIGHTS_BETWEEN_CORNERS &&
       this.rng.chance(cornerChanceAt(ctx.difficulty));
-    const tiles = this.rng.int(4, 10);
-    this.place(seg, 'straight', tiles * TILE_LENGTH);
+
+    const slot = SLOT_TIME * ctx.speed;
+    const lead = restSlotsAt(ctx.difficulty) * slot;
+    const withPattern =
+      this.emitted >= START_STRAIGHTS && this.rng.chance(patternChanceAt(ctx.difficulty));
+    const pattern = withPattern ? this.picker.pick(this.rng, tierAt(ctx.difficulty)) : null;
+    const span = pattern ? patternSpan(pattern) * slot + PATTERN_TAIL : 0;
+    // Before a corner the turn window (plus reaction time) must be free of obstacles.
+    const tail = ctx.cornerNext ? this.clearTail(ctx.speed) : 0;
+    const wanted = pattern ? lead + span + tail : this.rng.int(4, 8) * TILE_LENGTH + tail;
+    const length = Math.min(
+      MAX_SEGMENT_LENGTH,
+      Math.max(MIN_STRAIGHT_TILES * TILE_LENGTH, roundUpToTiles(wanted)),
+    );
+    this.place(seg, 'straight', length);
+    if (pattern) placePattern(seg, pattern, seg.startS + lead, slot, seg.decoSeed);
+
     this.cornerNext = ctx.cornerNext;
     this.straightsSinceCorner++;
     this.segmentsSinceBridge++;
   }
 
+  /** Obstacle-free distance needed before a corner block at `speed`. */
+  private clearTail(speed: number): number {
+    const window = Math.max(TURN_WINDOW_MIN_LEAD, speed * TURN_WINDOW_LEAD_TIME);
+    return window + speed * (INPUT_BUFFER_TIME + SLOT_TIME * 0.6);
+  }
+
   private emitBridge(seg: Segment): void {
     this.ctx.cornerNext = false;
-    const tiles = this.rng.pick(BRIDGE_LENGTH_TILES);
-    this.place(seg, 'bridge', tiles * TILE_LENGTH);
+    const slot = SLOT_TIME * this.ctx.speed;
+    const lead = Math.max(slot, 14);
+    const minLength = roundUpToTiles(lead + CRUMBLE_GAP_LENGTH + 10);
+    const length = Math.max(this.rng.pick(BRIDGE_LENGTH_TILES) * TILE_LENGTH, minLength);
+    this.place(seg, 'bridge', Math.min(MAX_SEGMENT_LENGTH, length));
+    placeCrumble(seg, seg.startS + lead + CRUMBLE_GAP_LENGTH / 2);
     this.segmentsSinceBridge = 0;
   }
 

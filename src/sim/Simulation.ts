@@ -1,16 +1,24 @@
-import { CENTER_LANE, CORNER_SIZE, KEEP_BEHIND, SEGMENT_POOL_SIZE, SPAWN_AHEAD } from '../config';
+import {
+  KEEP_BEHIND,
+  SEGMENT_POOL_SIZE,
+  SPAWN_AHEAD,
+  STUMBLE_WINDOW,
+  SURGE_GRACE_TIME,
+  SURGE_SPEED_MULT,
+} from '../config';
 import { Player } from '../entities/Player';
+import { PowerUpTimers } from '../entities/PowerUp';
+import type { CollisionHandler, HitKind } from '../systems/Collision';
+import { checkCollisions } from '../systems/Collision';
 import { distanceAtTime, speedAt } from '../systems/Difficulty';
-import { nextCorner, turnIntentStart, turnWindowEnd, turnWindowStart } from '../systems/Turns';
+import { nextCorner } from '../systems/Turns';
 import { DIR_X, DIR_Z, PathFrame } from '../world/Heading';
-import type { Segment } from '../world/Segment';
+import type { Obstacle, Segment } from '../world/Segment';
 import { SegmentPool } from '../world/SegmentPool';
 import { TrackGenerator } from '../world/TrackGenerator';
+import { Controls } from './Controls';
 import type { Dir } from './InputBuffer';
-import { InputBuffer } from './InputBuffer';
 import { SimEvents } from './SimEvents';
-
-const PENDING_CAPACITY = 8;
 
 export type DeathCause = 'none' | 'missedTurn' | 'wrongTurn' | 'pit' | 'obstacle' | 'caught';
 
@@ -18,14 +26,15 @@ export type DeathCause = 'none' | 'missedTurn' | 'wrongTurn' | 'pit' | 'obstacle
  * The complete game logic, headless and deterministic for a (seed, input sequence) pair.
  * Everything is in track space; `px/pz` are derived world coordinates for rendering.
  */
-export class Simulation {
+export class Simulation implements CollisionHandler {
   readonly player = new Player();
+  readonly powerUps = new PowerUpTimers();
   readonly pool = new SegmentPool(SEGMENT_POOL_SIZE);
   readonly generator: TrackGenerator;
   /** Frame of the straight run the player is currently on. */
   readonly frame = new PathFrame();
-  readonly buffer = new InputBuffer();
   readonly events = new SimEvents();
+  readonly controls: Controls;
 
   seed = 0;
   /** Path distance travelled (meters). */
@@ -46,15 +55,15 @@ export class Simulation {
   turnOffsetX = 0;
   turnOffsetZ = 0;
 
-  /** Id of the last corner turned (corners are identified by monotonic segment id). */
-  lastTurnedId = -1;
-  queuedTurnId = -1;
-
-  private readonly pending: Dir[] = new Array<Dir>(PENDING_CAPACITY).fill('UP');
-  private pendingCount = 0;
+  /** Elapsed time of the last stumble (-Infinity = none yet). */
+  lastStumbleAt = Number.NEGATIVE_INFINITY;
+  stumbles = 0;
+  /** Seconds of post-surge invulnerability left. */
+  graceTime = 0;
 
   constructor(seed: number) {
     this.generator = new TrackGenerator(seed);
+    this.controls = new Controls(this);
     this.reset(seed);
   }
 
@@ -65,18 +74,19 @@ export class Simulation {
     this.generator.reset(this.seed, this.startS);
     this.pool.clear();
     this.player.reset();
+    this.powerUps.reset();
+    this.controls.reset();
     this.frame.set(0, 0, 0, this.startS);
-    this.buffer.consume();
     this.events.clear();
-    this.pendingCount = 0;
     this.s = this.prevS = this.startS;
     this.elapsed = startTime;
     this.tick = 0;
     this.speed = speedAt(startTime);
     this.alive = true;
     this.deathCause = 'none';
-    this.lastTurnedId = -1;
-    this.queuedTurnId = -1;
+    this.lastStumbleAt = Number.NEGATIVE_INFINITY;
+    this.stumbles = 0;
+    this.graceTime = 0;
     this.turnOffsetX = this.turnOffsetZ = 0;
     this.generator.fill(this.pool, this.s + SPAWN_AHEAD);
     this.updateWorldPosition();
@@ -89,30 +99,45 @@ export class Simulation {
     return this.s - this.startS;
   }
 
+  get invulnerable(): boolean {
+    return this.powerUps.surge > 0 || this.graceTime > 0;
+  }
+
+  /** True while a second stumble would let the pursuer catch the player. */
+  get recentlyStumbled(): boolean {
+    return this.elapsed - this.lastStumbleAt <= STUMBLE_WINDOW;
+  }
+
   /** Queues a directional input; it is applied at the start of the next tick. */
   pushInput(dir: Dir): void {
-    if (this.pendingCount < PENDING_CAPACITY) this.pending[this.pendingCount++] = dir;
+    this.controls.push(dir);
   }
 
   /** The next corner the player has not turned yet (null if none streamed in). */
   upcomingCorner(): Segment | null {
-    return nextCorner(this.pool, this.lastTurnedId);
+    return nextCorner(this.pool, this.controls.lastTurnedId);
   }
 
   step(dt: number): void {
     if (!this.alive) return;
     this.tick++;
     this.elapsed += dt;
-    this.speed = speedAt(this.elapsed);
+    this.speed = speedAt(this.elapsed) * (this.powerUps.surge > 0 ? SURGE_SPEED_MULT : 1);
     this.prevS = this.s;
     this.prevPx = this.px;
     this.prevPz = this.pz;
 
-    this.processInputs(dt);
+    this.controls.process(dt);
     if (!this.alive) return;
+    const wasAirborne = !this.player.grounded;
     this.player.update(dt);
+    if (wasAirborne && this.player.grounded) this.events.push('land');
     this.s += this.speed * dt;
-    const turned = this.updateTurn();
+    this.tickPowerUps(dt);
+    const turned = this.controls.updateTurn(this.powerUps.surge > 0);
+    if (!this.alive) return;
+    checkCollisions(this.pool, this.player, this.s, this.prevS, this);
+    if (!this.alive) return;
     this.stream();
     this.updateWorldPosition();
     if (turned) {
@@ -130,84 +155,43 @@ export class Simulation {
     this.events.push('death');
   }
 
-  private processInputs(dt: number): void {
-    for (let i = 0; i < this.pendingCount; i++) {
-      const dir = this.pending[i]!;
-      if (!this.apply(dir)) this.buffer.push(dir);
+  onObstacleHit(o: Obstacle, kind: HitKind): void {
+    if (kind === 'pit') {
+      // Surge carries the runner across gaps; nothing else saves a fall.
+      if (this.powerUps.surge > 0) return;
+      this.die('pit');
+      return;
     }
-    this.pendingCount = 0;
-    if (this.buffer.dir !== null) {
-      if (this.apply(this.buffer.dir)) this.buffer.consume();
-      else this.buffer.tick(dt);
+    o.hit = true;
+    if (this.invulnerable) {
+      this.events.push('surgeSmash');
+      return;
     }
+    if (kind === 'sideHit') this.player.setLane(this.player.previousLane, false);
+    if (this.powerUps.shield > 0) {
+      this.powerUps.shield = 0;
+      this.events.push('shieldBreak');
+      return;
+    }
+    if (kind === 'fatal') this.die('obstacle');
+    else this.stumble();
   }
 
-  /** Tries to perform an input right now. Returns false if it should stay buffered. */
-  private apply(dir: Dir): boolean {
-    const p = this.player;
-    switch (dir) {
-      case 'UP':
-        if (!p.jump()) return false;
-        this.events.push('jump');
-        return true;
-      case 'DOWN':
-        p.slide();
-        this.events.push('slide');
-        return true;
-      case 'LEFT':
-      case 'RIGHT':
-        return this.applyLateral(dir === 'LEFT' ? -1 : 1);
+  private stumble(): void {
+    if (this.recentlyStumbled) {
+      this.die('caught');
+      return;
     }
+    this.lastStumbleAt = this.elapsed;
+    this.stumbles++;
+    this.events.push('stumble');
   }
 
-  private applyLateral(d: -1 | 1): boolean {
-    const corner = this.upcomingCorner();
-    if (corner && this.s >= turnIntentStart(corner, this.speed)) {
-      if (d === corner.turnDir) {
-        // Hold early intents in the buffer until the window actually opens.
-        if (this.s < turnWindowStart(corner, this.speed)) return false;
-        this.queuedTurnId = corner.id;
-        return true;
-      }
-      if (this.s >= corner.startS) {
-        this.die('wrongTurn');
-        return true;
-      }
-    }
-    if (!this.player.changeLane(d)) return false;
-    this.events.push('lane', d);
-    return true;
-  }
-
-  /** Executes a queued turn at the pivot, or kills the player if they ran past it. */
-  private updateTurn(): boolean {
-    const corner = this.upcomingCorner();
-    if (!corner || this.s < corner.pivotS) return false;
-    if (this.queuedTurnId === corner.id) {
-      this.executeTurn(corner);
-      return true;
-    }
-    if (this.s > turnWindowEnd(corner)) this.die('missedTurn');
-    return false;
-  }
-
-  private executeTurn(corner: Segment): void {
-    const oldX = this.frame.worldX(this.s, this.player.x);
-    const oldZ = this.frame.worldZ(this.s, this.player.x);
-    const h = corner.heading;
-    const half = CORNER_SIZE / 2;
-    this.frame.set(
-      corner.originX + DIR_X[h]! * half,
-      corner.originZ + DIR_Z[h]! * half,
-      corner.exitHeading,
-      corner.pivotS,
-    );
-    this.player.setLane(CENTER_LANE, true);
-    this.lastTurnedId = corner.id;
-    this.queuedTurnId = -1;
-    this.turnOffsetX = oldX - this.frame.worldX(this.s, 0);
-    this.turnOffsetZ = oldZ - this.frame.worldZ(this.s, 0);
-    this.events.push('turn', corner.turnDir);
+  private tickPowerUps(dt: number): void {
+    const hadSurge = this.powerUps.surge > 0;
+    this.powerUps.tick(dt);
+    if (hadSurge && this.powerUps.surge <= 0) this.graceTime = SURGE_GRACE_TIME;
+    else if (this.graceTime > 0) this.graceTime = Math.max(0, this.graceTime - dt);
   }
 
   private stream(): void {

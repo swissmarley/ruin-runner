@@ -41,10 +41,20 @@ export const TURN_LATE_MARGIN = CORNER_SIZE / 2 - 0.6;
 /** Visual turn easing time (render only). */
 export const TURN_BLEND_TIME = 0.2;
 
-// Obstacles
+// Obstacles (depth = extent along the path)
 export const LOW_BARRIER_HEIGHT = 0.75;
+export const LOW_DEPTH = 0.5;
 export const BEAM_BOTTOM = 1.0;
+export const BEAM_TOP = 2.6;
+export const BEAM_DEPTH = 0.5;
+export const PILLAR_HEIGHT = 1.9;
+export const PILLAR_DEPTH = 1.2;
+export const GAP_LENGTH = 2.6;
+export const CRUMBLE_GAP_LENGTH = 3.8;
+/** How far the player's center may hang over a gap edge before falling. */
 export const GAP_EDGE_GRACE = 0.25;
+/** Obstacles are narrower than their lane by this much on each side (lane-change leniency). */
+export const OBSTACLE_LANE_INSET = 0.3;
 
 // Pursuer & failure
 export const STUMBLE_WINDOW = 4;

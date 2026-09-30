@@ -27,9 +27,17 @@ export function tierAt(difficulty: number): number {
   return 3;
 }
 
-/** Empty "breathing room" between patterns, in slots. Shrinks as difficulty rises. */
+/**
+ * Empty "breathing room" before each pattern, in slots. Shrinks as difficulty rises but never
+ * below one slot, which guarantees any row-to-row transition across patterns is feasible.
+ */
 export function restSlotsAt(difficulty: number): number {
-  return 1.6 - 0.9 * clamp01(difficulty);
+  return 1.9 - 0.9 * clamp01(difficulty);
+}
+
+/** Probability that a straight carries an obstacle pattern (vs. a breather with coins only). */
+export function patternChanceAt(difficulty: number): number {
+  return 0.72 + 0.23 * clamp01(difficulty);
 }
 
 /** Probability that a run of straights ends in a corner after each pattern. */

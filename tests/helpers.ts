@@ -7,6 +7,10 @@ export interface BotRunResult {
   alive: boolean;
   seconds: number;
   maxPoolCount: number;
+  jumps: number;
+  slides: number;
+  lanes: number;
+  turns: number;
 }
 
 /** Runs the perfect-play bot headlessly for `seconds` of game time. */
@@ -16,13 +20,27 @@ export function runBot(seed: number, seconds: number, startTime = 0): BotRunResu
   const bot = new Bot(sim);
   const ticks = Math.round(seconds / DT);
   let maxPoolCount = 0;
+  const counts = { jump: 0, slide: 0, lane: 0, turn: 0 };
   for (let i = 0; i < ticks && sim.alive; i++) {
     bot.update();
     sim.step(DT);
+    for (let k = 0; k < sim.events.count; k++) {
+      const t = sim.events.types[k]!;
+      if (t === 'jump' || t === 'slide' || t === 'lane' || t === 'turn') counts[t]++;
+    }
     sim.events.clear();
     if (sim.pool.count > maxPoolCount) maxPoolCount = sim.pool.count;
   }
-  return { sim, alive: sim.alive, seconds: sim.elapsed - startTime, maxPoolCount };
+  return {
+    sim,
+    alive: sim.alive,
+    seconds: sim.elapsed - startTime,
+    maxPoolCount,
+    jumps: counts.jump,
+    slides: counts.slide,
+    lanes: counts.lane,
+    turns: counts.turn,
+  };
 }
 
 /** Steps a simulation without input for `seconds`. */

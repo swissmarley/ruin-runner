@@ -12,7 +12,7 @@ export const MAX_PICKUPS = 2;
 export const MAX_HINTS = 2;
 /** Floor tiles are this long; straight segment lengths are multiples of it. */
 export const TILE_LENGTH = 4;
-export const MAX_SEGMENT_LENGTH = 112;
+export const MAX_SEGMENT_LENGTH = 144;
 export const ALL_LANES = 0b111;
 
 /** An obstacle spanning [s0, s1] of path distance over the lanes in `laneMask`. */
