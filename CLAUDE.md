@@ -74,7 +74,7 @@ docs/DECISIONS.md      design decisions log
 ## Milestones
 
 - [x] **M1 Scaffold** — Vite + TS strict + ESLint + Prettier + Vitest, spinning cube, `npm run check`
-- [ ] **M2 Running core** — auto-run, 3 lanes, jump/slide, chase cam, fixed-step loop, input
+- [x] **M2 Running core** — auto-run, 3 lanes, jump/slide, chase cam, fixed-step loop, input
 - [ ] **M3 Procedural track** — segment pool, seeded gen, turns + windows, 10-min bot sim
 - [ ] **M4 Obstacles & death** — patterns, collision, stumble/death, game over + instant retry
 - [ ] **M5 Pursuer, coins, power-ups, scoring** — Magnet/Shield/Surge (8 s), difficulty ramp
@@ -85,3 +85,6 @@ docs/DECISIONS.md      design decisions log
 ## Verification log
 
 - M1: `npm run check` green; dev server renders the spinning cube.
+- M2: unit tests for lanes, jump/slide/fast-fall timing, input buffer, fixed-step loop, state
+  machine, swipe detection. Browser (390×844): keyboard ←/Space/↓ and synthetic touch swipes
+  (right/up/down/left) drive the player; no console warnings.
