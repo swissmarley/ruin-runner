@@ -53,6 +53,9 @@ export class WorldView {
   }
 
   update(pool: SegmentPool): void {
+    this.floor.releaseInactive(pool, this.builtIds);
+    this.planks.releaseInactive(pool, this.builtIds);
+    this.curbs.releaseInactive(pool, this.builtIds);
     for (let i = 0; i < pool.count; i++) {
       const seg = pool.at(i);
       if (this.builtIds[seg.slot] !== seg.id) {

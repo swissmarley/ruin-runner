@@ -45,7 +45,8 @@ export const TURN_BLEND_TIME = 0.2;
 export const LOW_BARRIER_HEIGHT = 0.75;
 export const LOW_DEPTH = 0.5;
 export const BEAM_BOTTOM = 1.0;
-export const BEAM_TOP = 2.6;
+/** Any jump overlaps [BEAM_BOTTOM, BEAM_TOP] (feet ≤ 1.35 m, head ≥ 1.7 m), so 2 m suffices. */
+export const BEAM_TOP = 2.0;
 export const BEAM_DEPTH = 0.5;
 export const PILLAR_HEIGHT = 1.9;
 export const PILLAR_DEPTH = 1.2;

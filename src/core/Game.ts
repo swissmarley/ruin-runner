@@ -1,3 +1,4 @@
+import { AudioManager } from '../audio/AudioManager';
 import { DT, MAX_STEPS_PER_FRAME } from '../config';
 import { InputManager } from '../input/InputManager';
 import { GameView } from '../render/GameView';
@@ -8,7 +9,9 @@ import { GameOver } from '../ui/GameOver';
 import { Hud } from '../ui/Hud';
 import { Menu } from '../ui/Menu';
 import { Pause } from '../ui/Pause';
+import { Feedback } from './Feedback';
 import { FixedStepLoop, RafDriver } from './GameLoop';
+import { Haptics } from './Haptics';
 import { randomSeed } from './Rng';
 import type { GameState } from './StateMachine';
 import { StateMachine } from './StateMachine';
@@ -29,6 +32,9 @@ export class Game {
   private readonly gameOver: GameOver;
   private readonly hud: Hud;
   private readonly pause: Pause;
+  readonly audio = new AudioManager();
+  readonly haptics = new Haptics();
+  private readonly feedback: Feedback;
   /** When true the perfect-play bot drives the runner (attract mode / smoke tests). */
   autopilot = false;
   private deathTimer = 0;
@@ -38,6 +44,7 @@ export class Game {
     this.sim = new Simulation(randomSeed());
     this.bot = new Bot(this.sim);
     this.view = new GameView(container, this.sim);
+    this.feedback = new Feedback(this.view, this.audio, this.haptics);
     const ui = document.createElement('div');
     ui.className = 'ui-layer';
     container.appendChild(ui);
@@ -61,6 +68,18 @@ export class Game {
     });
     this.states.onChange((to, from) => this.onStateChange(to, from));
     this.driver = new RafDriver((dt) => this.frame(dt));
+    // Mobile browsers only allow audio to start inside a user gesture.
+    const unlock = (): void => this.audio.unlock();
+    for (const type of ['pointerdown', 'touchend', 'keydown']) {
+      window.addEventListener(type, unlock, { capture: true, passive: true });
+    }
+    document.addEventListener('visibilitychange', () => this.onVisibility());
+  }
+
+  private onVisibility(): void {
+    const hidden = document.visibilityState === 'hidden';
+    if (hidden && this.states.state === 'Playing' && this.sim.alive) this.states.go('Paused');
+    this.audio.setSuspended(hidden);
   }
 
   start(): void {
@@ -117,6 +136,7 @@ export class Game {
     if (to === 'Playing' || to === 'Paused') this.hud.show();
     else this.hud.hide();
     this.input.setEnabled(to === 'Playing');
+    this.audio.setMusicMode(to === 'Playing' ? 'run' : 'menu');
     if (to === 'Menu') this.menu.setRecords(this.best, 0);
   }
 
@@ -136,10 +156,12 @@ export class Game {
     let alpha = 1;
     if (running) {
       alpha = this.loop.advance(dt, this.stepSim);
-      this.drainEvents();
+      this.feedback.drain(this.sim.events, state === 'Playing' && !this.autopilot);
       if (!this.sim.alive) this.afterDeath(dt, state);
     }
-    this.view.draw(running ? dt : 0, alpha);
+    const audible = state === 'Playing' && !this.autopilot;
+    if (this.view.draw(running ? dt : 0, alpha)) this.feedback.crumble(audible);
+    this.audio.update(dt, this.sim.pursuer.closeness, audible && this.sim.alive);
     if (state === 'Playing') this.hud.update(this.sim);
   }
 
@@ -162,11 +184,5 @@ export class Game {
       coins: this.sim.scoring.coins,
       distance: this.sim.distance,
     });
-  }
-
-  private drainEvents(): void {
-    const ev = this.sim.events;
-    for (let i = 0; i < ev.count; i++) this.view.onEvent(ev.types[i]!);
-    ev.clear();
   }
 }

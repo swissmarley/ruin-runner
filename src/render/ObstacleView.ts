@@ -10,6 +10,7 @@ import { beamBlock, beamPost, fallenColumn, pillarStump, rubbleBarrier } from '.
 import { SlotInstances } from './SlotInstances';
 
 const PER_SLOT = MAX_OBSTACLES * 3;
+
 const NONE = -1;
 
 const m = new THREE.Matrix4();
@@ -18,10 +19,10 @@ const p = new THREE.Vector3();
 const sc = new THREE.Vector3();
 const up = new THREE.Vector3(0, 1, 0);
 
-/** Which instanced mesh (and index) represents each obstacle, so hits can hide it. */
+/** Which instanced mesh (and indices) represent each obstacle, so hits can hide it. */
 interface Ref {
   mesh: SlotInstances | null;
-  index: number;
+  readonly indices: Int32Array;
   count: number;
 }
 
@@ -36,6 +37,7 @@ export class ObstacleView {
   private readonly posts: SlotInstances;
   private readonly stumps: SlotInstances;
   private readonly columns: SlotInstances;
+  private readonly all: SlotInstances[];
   private readonly builtIds: Int32Array;
   private readonly refs: Ref[][] = [];
   private readonly hidden: Uint8Array;
@@ -47,6 +49,7 @@ export class ObstacleView {
     this.posts = new SlotInstances(beamPost(), mat, slots, MAX_OBSTACLES * 2, false);
     this.stumps = new SlotInstances(pillarStump(), mat, slots, MAX_OBSTACLES, false);
     this.columns = new SlotInstances(fallenColumn(), mat, slots, MAX_OBSTACLES, false);
+    this.all = [this.rubble, this.beams, this.posts, this.stumps, this.columns];
     for (const s of [this.rubble, this.beams, this.stumps, this.columns]) s.mesh.castShadow = true;
     this.group.add(
       this.rubble.mesh,
@@ -59,21 +62,20 @@ export class ObstacleView {
     this.hidden = new Uint8Array(slots * MAX_OBSTACLES);
     for (let i = 0; i < slots; i++) {
       const row: Ref[] = [];
-      for (let k = 0; k < MAX_OBSTACLES; k++) row.push({ mesh: null, index: NONE, count: 0 });
+      for (let k = 0; k < MAX_OBSTACLES; k++) {
+        row.push({ mesh: null, indices: new Int32Array(3).fill(NONE), count: 0 });
+      }
       this.refs.push(row);
     }
   }
 
   invalidate(): void {
     this.builtIds.fill(-1);
-    for (let i = 0; i < this.builtIds.length; i++) {
-      for (const s of [this.rubble, this.beams, this.posts, this.stumps, this.columns]) {
-        s.clearSlot(i);
-      }
-    }
+    for (let i = 0; i < this.builtIds.length; i++) for (const s of this.all) s.clearSlot(i);
   }
 
   update(pool: SegmentPool): void {
+    for (let k = 0; k < this.all.length; k++) this.all[k]!.releaseInactive(pool, this.builtIds);
     for (let i = 0; i < pool.count; i++) {
       const seg = pool.at(i);
       if (this.builtIds[seg.slot] !== seg.id) {
@@ -82,6 +84,7 @@ export class ObstacleView {
       }
       this.syncHits(seg);
     }
+    for (let k = 0; k < this.all.length; k++) this.all[k]!.flush();
   }
 
   private syncHits(seg: Segment): void {
@@ -90,23 +93,22 @@ export class ObstacleView {
       if (!seg.obstacles[k]!.hit || this.hidden[base + k]) continue;
       this.hidden[base + k] = 1;
       const ref = this.refs[seg.slot]![k]!;
-      if (!ref.mesh || ref.index === NONE) continue;
-      for (let n = 0; n < ref.count; n++) ref.mesh.hide(ref.index + n);
+      if (!ref.mesh) continue;
+      for (let n = 0; n < ref.count; n++) ref.mesh.hide(ref.indices[n]!);
     }
   }
 
   private build(seg: Segment): void {
     const slot = seg.slot;
-    for (const s of [this.rubble, this.beams, this.posts, this.stumps, this.columns]) s.begin(slot);
+    for (const s of this.all) s.begin(slot);
     this.hidden.fill(0, slot * MAX_OBSTACLES, (slot + 1) * MAX_OBSTACLES);
     for (let k = 0; k < seg.obstacleCount; k++) {
       const ref = this.refs[slot]![k]!;
       ref.mesh = null;
-      ref.index = NONE;
-      ref.count = 1;
+      ref.count = 0;
       this.buildObstacle(seg, seg.obstacles[k]!, ref);
     }
-    for (const s of [this.rubble, this.beams, this.posts, this.stumps, this.columns]) s.commit();
+    for (const s of this.all) s.commit();
   }
 
   private buildObstacle(seg: Segment, o: Obstacle, ref: Ref): void {
@@ -129,31 +131,26 @@ export class ObstacleView {
     if (o.kind === 'low') {
       // One rubble unit per lane; a hit knocks the whole barrier down.
       ref.mesh = this.rubble;
-      ref.index = this.rubble.nextIndex;
-      ref.count = last - first + 1;
       for (let lane = first; lane <= last; lane++) {
         this.compose(seg, s, laneToX(lane), 1, 1, flip);
-        this.rubble.push(m);
+        ref.indices[ref.count++] = this.rubble.push(m);
       }
     } else if (o.kind === 'beam') {
       ref.mesh = this.beams;
-      ref.index = this.beams.nextIndex;
       this.compose(seg, s, cx, width + 0.4, 1, 0);
-      this.beams.push(m);
+      ref.indices[ref.count++] = this.beams.push(m);
       this.compose(seg, s, x0 - 0.2, 1, 1, 0);
       this.posts.push(m);
       this.compose(seg, s, x1 + 0.2, 1, 1, 0);
       this.posts.push(m);
     } else if (first === last) {
       ref.mesh = this.stumps;
-      ref.index = this.stumps.nextIndex;
       this.compose(seg, s, cx, 1, 1, flip + o.variant * 0.7);
-      this.stumps.push(m);
+      ref.indices[ref.count++] = this.stumps.push(m);
     } else {
       ref.mesh = this.columns;
-      ref.index = this.columns.nextIndex;
       this.compose(seg, s, cx, width + 0.2, 1, flip);
-      this.columns.push(m);
+      ref.indices[ref.count++] = this.columns.push(m);
     }
   }
 

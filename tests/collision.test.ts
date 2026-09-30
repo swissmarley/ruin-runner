@@ -54,6 +54,15 @@ describe('obstacle collisions', () => {
     expect(w.hits).toEqual(['fatal']);
   });
 
+  it('even the apex of a jump cannot clear a beam', () => {
+    const w = world('beam', 10, 10.5);
+    const p = new Player();
+    p.jump();
+    for (let i = 0; i < Math.round(JUMP_DURATION / 2 / DT); i++) p.update(DT);
+    checkCollisions(w.pool, p, 10.2, 10.0, w.handler);
+    expect(w.hits).toEqual(['fatal']);
+  });
+
   it('a pillar is fatal head-on and cannot be jumped', () => {
     const w = world('pillar', 10, 11.2, 0b010);
     const p = new Player();

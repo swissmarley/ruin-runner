@@ -78,7 +78,7 @@ docs/DECISIONS.md      design decisions log
 - [x] **M3 Procedural track** — segment pool, seeded gen, turns + windows, 10-min bot sim
 - [x] **M4 Obstacles & death** — patterns, collision, stumble/death, game over + instant retry
 - [x] **M5 Pursuer, coins, power-ups, scoring** — Magnet/Shield/Surge (8 s), difficulty ramp
-- [ ] **M6 Art & audio** — low-poly ruins, fog/lighting, particles, procedural SFX + music
+- [x] **M6 Art & audio** — low-poly ruins, fog/lighting, particles, procedural SFX + music
 - [ ] **M7 UI, persistence, PWA** — menu/HUD/settings, save data, tutorial, installable PWA
 - [ ] **M8 Polish & perf** — adaptive quality, debug overlay, throttled profiling, README
 
@@ -100,3 +100,6 @@ docs/DECISIONS.md      design decisions log
 - M5: scoring/multiplier, pursuer lunge/retreat, difficulty-ramp, coin/magnet/power-up and
   placement-safety tests; bot collects coins while staying flawless. Browser: coins spin, HUD
   (score, distance, relics, multiplier, pause) updates, Warden framing measured by projection.
+- M6: browser: ~40 k tris / ~43 draw calls steady over 60 s of autopilot; AudioContext
+  running after tapping Play, all 14 SFX play without errors, music loop renders (20 s) in
+  ~0.8 s offline; beam-apex collision test added (beam top lowered to 2.0 m).

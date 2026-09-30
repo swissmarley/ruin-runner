@@ -100,3 +100,31 @@ Short log of choices made without asking. Newest at the bottom of each section.
   +1 s grace). Placed in obstacle-free lead-ins, not before 150 m, at most one per ~6 segments.
 - **Coins spin in the vertex shader** (phase from instance position), so thousands of coins cost
   zero CPU per frame; only collected or magnet-pulled coins touch instance matrices.
+
+## Art & audio
+
+- **Look:** walkways floating over a misty jungle chasm. Sunken columns rise from the depths
+  beside the path, piers hold the walkway up, torches line the curbs, gateway arches mark some
+  straights, guardian statues watch the corners. Warm low sun + cool hemisphere light, fog
+  matched to a hazy horizon on a vertex-coloured sky dome. Everything is flat-shaded Lambert
+  with vertex colours (merged primitives), no textures.
+- **Instance allocator:** `SlotInstances` hands out instance indices per segment slot from a
+  LIFO free list; `mesh.count` is the high-water mark. Reserving worst-case ranges per slot
+  made the GPU process ~1.4 M triangles of zero-scale instances; the allocator brings a typical
+  frame to ~40 k triangles and ~43 draw calls, stable over time.
+- **GPU-side animation:** coin spin and torch-flame flicker are done in the vertex shader via
+  `onBeforeCompile` (phase from instance position), so they cost no CPU per frame.
+- **Beam height 2.0 m** (not 2.6): any jump still overlaps [1.0, 2.0] m, and the shorter lintel
+  no longer blocks the chase camera's view of a sliding runner.
+- **Particles:** one pooled `THREE.Points` (480 particles, custom shader, preallocated buffers)
+  for coin sparkles, running dust, jump/land/slide puffs, stumble/smash debris, power-up bursts,
+  and bridge collapse.
+- **Audio is 100 % procedural Web Audio:** one-shot SFX recipes (oscillators + a shared noise
+  buffer), a Warden growl loop (detuned saws → resonant low-pass with LFO) and footsteps whose
+  volume follows `closeness²`, and a 20 s ambient loop (drone, D-minor-pentatonic plucks, hand
+  drums, shaker, delay) rendered once with `OfflineAudioContext` and played as a looping buffer.
+  The menu runs the music through a low-pass filter; the attract-mode demo is silent apart from
+  music. The context is created/resumed on the first pointer/key gesture (mobile autoplay
+  rules) and suspended when the page is hidden (which also auto-pauses a run).
+- **Haptics:** `navigator.vibrate` on stumble (45 ms), shield break (25 ms), crumble (20 ms),
+  death (80-40-120 ms), behind a setting.

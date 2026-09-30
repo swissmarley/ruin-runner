@@ -14,6 +14,7 @@ import {
   surgeGeometry,
 } from './CollectibleMeshes';
 import { PALETTE } from './Materials';
+import { SlotInstances } from './SlotInstances';
 
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 const m = new THREE.Matrix4();
@@ -33,10 +34,11 @@ export type CoinBurst = (x: number, y: number, z: number) => void;
 export class CollectiblesView {
   readonly group = new THREE.Group();
   readonly time = { value: 0 };
-  private readonly coins: THREE.InstancedMesh;
+  private readonly coins: SlotInstances;
+  /** Instance index of coin k in slot s at [s × MAX_COINS + k] (-1 = not drawn). */
+  private readonly coinIndex: Int32Array;
   private readonly pickups: Record<PowerUpKind, THREE.InstancedMesh>;
   private readonly builtIds: Int32Array;
-  private readonly coinShown: Uint8Array;
   private readonly slots: number;
 
   constructor(slots: number) {
@@ -48,7 +50,9 @@ export class CollectiblesView {
       emissiveIntensity: 0.35,
     });
     addInstanceSpin(coinMat, this.time, 3.2);
-    this.coins = this.instanced(coinGeometry(), coinMat, slots * MAX_COINS);
+    this.coins = new SlotInstances(coinGeometry(), coinMat, slots, MAX_COINS, false);
+    this.group.add(this.coins.mesh);
+    this.coinIndex = new Int32Array(slots * MAX_COINS).fill(-1);
     const orbMat = new THREE.MeshBasicMaterial({ vertexColors: true });
     this.pickups = {
       magnet: this.instanced(magnetGeometry(), orbMat, slots * MAX_PICKUPS),
@@ -56,7 +60,6 @@ export class CollectiblesView {
       surge: this.instanced(surgeGeometry(), orbMat, slots * MAX_PICKUPS),
     };
     this.builtIds = new Int32Array(slots).fill(-1);
-    this.coinShown = new Uint8Array(slots * MAX_COINS);
   }
 
   private instanced(
@@ -74,67 +77,62 @@ export class CollectiblesView {
 
   invalidate(): void {
     this.builtIds.fill(-1);
-    this.coinShown.fill(0);
-    for (let i = 0; i < this.slots * MAX_COINS; i++) this.coins.setMatrixAt(i, ZERO);
-    this.coins.instanceMatrix.needsUpdate = true;
+    this.coinIndex.fill(-1);
+    for (let i = 0; i < this.slots; i++) this.coins.clearSlot(i);
   }
 
   update(dt: number, sim: Simulation, onCollect: CoinBurst): void {
     this.time.value += dt;
-    let dirty = false;
+    this.coins.releaseInactive(sim.pool, this.builtIds);
     for (let i = 0; i < sim.pool.count; i++) {
       const seg = sim.pool.at(i);
       if (this.builtIds[seg.slot] !== seg.id) {
         this.builtIds[seg.slot] = seg.id;
         this.buildCoins(sim, seg);
-        dirty = true;
       }
       if (seg.endS < sim.s - 5 || seg.startS > sim.s + 40) continue;
-      if (this.syncCoins(sim, seg, onCollect)) dirty = true;
+      this.syncCoins(sim, seg, onCollect);
     }
-    if (dirty) this.coins.instanceMatrix.needsUpdate = true;
+    this.coins.flush();
     this.updatePickups(sim);
   }
 
   private buildCoins(sim: Simulation, seg: Segment): void {
     const base = seg.slot * MAX_COINS;
+    this.coins.begin(seg.slot);
     for (let k = 0; k < MAX_COINS; k++) {
-      if (k < seg.coinCount && this.placeCoin(sim, seg, k)) this.coinShown[base + k] = 1;
-      else {
-        this.coins.setMatrixAt(base + k, ZERO);
-        this.coinShown[base + k] = 0;
-      }
+      this.coinIndex[base + k] = k < seg.coinCount ? this.placeCoin(sim, seg, k, -1) : -1;
     }
+    this.coins.commit();
   }
 
-  private placeCoin(sim: Simulation, seg: Segment, k: number): boolean {
+  /** Positions coin k; pushes a new instance when `index` is -1. Returns the index. */
+  private placeCoin(sim: Simulation, seg: Segment, k: number, index: number): number {
     const c = seg.coins[k]!;
-    if (c.collected || !worldAt(sim.pool, c.s, c.x, wp)) return false;
+    if (c.collected || !worldAt(sim.pool, c.s, c.x, wp)) return -1;
     p.set(wp.x, c.y, wp.z);
     q.setFromAxisAngle(up, headingYaw(wp.heading));
     m.compose(p, q, one);
-    this.coins.setMatrixAt(seg.slot * MAX_COINS + k, m);
-    return true;
+    if (index < 0) return this.coins.push(m);
+    this.coins.set(index, m);
+    return index;
   }
 
-  /** Hides collected coins and moves magnet-attracted ones. Returns true if anything changed. */
-  private syncCoins(sim: Simulation, seg: Segment, onCollect: CoinBurst): boolean {
+  /** Hides collected coins and moves magnet-attracted ones. */
+  private syncCoins(sim: Simulation, seg: Segment, onCollect: CoinBurst): void {
     const base = seg.slot * MAX_COINS;
-    let changed = false;
     for (let k = 0; k < seg.coinCount; k++) {
+      const index = this.coinIndex[base + k]!;
+      if (index < 0) continue;
       const c = seg.coins[k]!;
-      if (!this.coinShown[base + k]) continue;
       if (c.collected) {
-        this.coinShown[base + k] = 0;
-        this.coins.setMatrixAt(base + k, ZERO);
+        this.coinIndex[base + k] = -1;
+        this.coins.hide(index);
         if (worldAt(sim.pool, c.s, c.x, wp)) onCollect(wp.x, c.y, wp.z);
-        changed = true;
       } else if (c.attracted) {
-        this.placeCoin(sim, seg, k);
-        changed = true;
+        this.placeCoin(sim, seg, k, index);
       }
     }
-    return changed;
   }
 
   private updatePickups(sim: Simulation): void {

@@ -50,6 +50,11 @@ export class SegmentPool {
     for (const s of this.slots) s.id = -1;
   }
 
+  /** True if the slot currently holds a live segment. */
+  isSlotActive(slot: number): boolean {
+    return (slot - this.head + this.capacity) % this.capacity < this.size;
+  }
+
   /** Index (from oldest) of the segment containing path distance `s`, or -1. */
   indexAt(s: number): number {
     for (let i = 0; i < this.size; i++) {

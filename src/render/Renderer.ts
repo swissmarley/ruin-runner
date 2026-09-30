@@ -12,6 +12,8 @@ export class Renderer {
   readonly hemi: THREE.HemisphereLight;
   private pixelRatio = 1;
   private shadows = true;
+  /** Called with the drawing-buffer height after every resize. */
+  onResize: ((bufferHeight: number) => void) | null = null;
 
   constructor(container: HTMLElement) {
     this.gl = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -22,7 +24,7 @@ export class Renderer {
     container.appendChild(this.gl.domElement);
 
     this.scene.background = new THREE.Color(PALETTE.fog);
-    this.scene.fog = new THREE.Fog(PALETTE.fog, 30, 125);
+    this.scene.fog = new THREE.Fog(PALETTE.fog, 28, 120);
 
     this.camera = new THREE.PerspectiveCamera(62, 1, 0.3, 160);
 
@@ -85,6 +87,7 @@ export class Renderer {
     // Portrait screens get a wider vertical FOV so lanes stay visible.
     this.camera.fov = w < h ? 70 : 58;
     this.camera.updateProjectionMatrix();
+    this.onResize?.(this.gl.domElement.height);
   }
 
   render(): void {
