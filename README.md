@@ -11,6 +11,7 @@ apart from the generated app icons.
 - **Stack:** TypeScript (strict) · Vite · Three.js · Vitest · ESLint · Prettier
 - **Bundle:** ~170 KB gzipped (one JS chunk + CSS), installable PWA, works offline
 - **Target:** portrait phones at 60 FPS (adaptive quality), desktop keyboard for development
+- **Play it:** https://swissmarley.github.io/ruin-runner/
 
 ## Quick start
 
@@ -143,8 +144,10 @@ nginx, and so on). Notes:
   `assets/` is content-hashed and can be cached forever (`immutable`).
 - The service worker uses network-first for pages and cache-first for hashed assets, and trims
   old assets automatically. Bump `VERSION` in `public/sw.js` to force a full cache reset.
-- Example for GitHub Pages: push `dist/` to a `gh-pages` branch, or use an Action that runs
-  `npm ci && npm run build` and publishes `dist/`.
+- **GitHub Pages (set up):** `.github/workflows/deploy.yml` runs `npm run check` and
+  `npm run build` on every pull request. On each push to `main` it also deploys `dist/` to
+  Pages. You can re-run it by hand from the Actions tab (`workflow_dispatch`). Pages must be
+  set to "GitHub Actions" as its source; this repo already is.
 
 ## Performance notes
 
