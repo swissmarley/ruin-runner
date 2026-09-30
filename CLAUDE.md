@@ -75,7 +75,7 @@ docs/DECISIONS.md      design decisions log
 
 - [x] **M1 Scaffold** — Vite + TS strict + ESLint + Prettier + Vitest, spinning cube, `npm run check`
 - [x] **M2 Running core** — auto-run, 3 lanes, jump/slide, chase cam, fixed-step loop, input
-- [ ] **M3 Procedural track** — segment pool, seeded gen, turns + windows, 10-min bot sim
+- [x] **M3 Procedural track** — segment pool, seeded gen, turns + windows, 10-min bot sim
 - [ ] **M4 Obstacles & death** — patterns, collision, stumble/death, game over + instant retry
 - [ ] **M5 Pursuer, coins, power-ups, scoring** — Magnet/Shield/Surge (8 s), difficulty ramp
 - [ ] **M6 Art & audio** — low-poly ruins, fog/lighting, particles, procedural SFX + music
@@ -88,3 +88,8 @@ docs/DECISIONS.md      design decisions log
 - M2: unit tests for lanes, jump/slide/fast-fall timing, input buffer, fixed-step loop, state
   machine, swipe detection. Browser (390×844): keyboard ←/Space/↓ and synthetic touch swipes
   (right/up/down/left) drive the player; no console warnings.
+- M3: generator determinism/contiguity/no-self-overlap tests; turn window tests (early buffer,
+  queued pivot turn, missed turn, wrong turn); bot survives 1000 seeds × 40 s from start and
+  1000 seeds × 25 s at top speed; 10-minute headless run alive with pool ≤ 28 and heap growth
+  < 1 MB after forced GC. Browser: autopilot (`__game.autopilot = true`) turns corners with
+  smooth camera blend.

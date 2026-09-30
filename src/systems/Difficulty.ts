@@ -36,3 +36,31 @@ export function restSlotsAt(difficulty: number): number {
 export function cornerChanceAt(difficulty: number): number {
   return 0.22 + 0.18 * clamp01(difficulty);
 }
+
+/** Distance covered after `t` seconds at base speed (closed-form integral of `speedAt`). */
+export function distanceAtTime(t: number): number {
+  const T = SPEED_RAMP_TIME;
+  const range = SPEED_MAX - SPEED_MIN;
+  if (t <= 0) return 0;
+  if (t >= T) return SPEED_MIN * T + range * T * 0.5 + SPEED_MAX * (t - T);
+  const u = t / T;
+  return SPEED_MIN * t + range * T * (0.25 * u * u + 0.5 * u * u * u - 0.25 * u * u * u * u);
+}
+
+/**
+ * Inverse of `distanceAtTime`. The generator uses it to derive difficulty from distance alone,
+ * so a track is a pure function of its seed. Surges only make the player arrive *earlier*
+ * (i.e. slower than estimated), so speed estimates from this are safe upper bounds.
+ */
+export function timeAtDistance(s: number): number {
+  if (s <= 0) return 0;
+  let lo = 0;
+  let hi = 60;
+  while (distanceAtTime(hi) < s) hi *= 2;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (distanceAtTime(mid) < s) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}

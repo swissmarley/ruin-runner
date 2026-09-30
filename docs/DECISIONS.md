@@ -36,3 +36,24 @@ Short log of choices made without asking. Newest at the bottom of each section.
   the track edge.
 - **Dev handle:** in dev builds `window.__game` exposes the game and `debugAdvance(seconds)`,
   used for smoke tests while the browser pane is hidden (rAF paused).
+
+## Track & turns
+
+- **Track is a pure function of the seed.** The generator derives difficulty from distance via
+  the inverse of the base speed curve (`timeAtDistance`), never from live state. Surges only
+  make the player arrive _earlier_ (therefore slower than estimated), so spacing computed from
+  the estimate is always safe.
+- **Headings are restricted to west/north/east.** From east the generator can only turn left,
+  from west only right, so the path zig-zags forward and can never overlap itself.
+- **Corners are square blocks** (`CORNER_SIZE` = track width) with the pivot at their center.
+  A correct swipe inside the window _queues_ the turn; it executes when the player reaches the
+  pivot (or immediately if already past it). Turning resets the player to the center lane —
+  the renderer hides the snap with a 200 ms yaw + position blend (`TurnBlend`).
+- **Turn window** opens `max(3 m, 0.35 s × speed)` before the corner block and closes 3 m past
+  the pivot (just before the far wall). Lateral inputs up to one buffer-time (150 ms) before
+  the window are held as turn intents instead of becoming lane changes.
+- **Wrong way:** a wrong-direction swipe while still on the straight part of the window is just
+  a lane change; inside the corner block it is a fatal "wrong turn". Running past the window
+  without turning is a fatal "missed turn".
+- **No bridge directly after a corner, no corner directly after a corner**, and at least two
+  straights at the start of every run.

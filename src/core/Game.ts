@@ -6,6 +6,7 @@ import { PlayerView } from '../render/PlayerView';
 import { Renderer } from '../render/Renderer';
 import { TurnBlend } from '../render/TurnBlend';
 import { WorldView } from '../render/WorldView';
+import { Bot } from '../sim/Bot';
 import type { Dir } from '../sim/InputBuffer';
 import { Simulation } from '../sim/Simulation';
 import { FixedStepLoop, RafDriver } from './GameLoop';
@@ -25,9 +26,13 @@ export class Game {
   private readonly loop = new FixedStepLoop(DT, MAX_STEPS_PER_FRAME);
   private readonly driver: RafDriver;
   private readonly input: InputManager;
+  private readonly bot: Bot;
+  /** When true the perfect-play bot drives the runner (attract mode / smoke tests). */
+  autopilot = false;
 
   constructor(container: HTMLElement) {
     this.sim = new Simulation(randomSeed());
+    this.bot = new Bot(this.sim);
     this.renderer = new Renderer(container);
     this.world = new WorldView(this.materials, this.sim.pool.capacity);
     this.playerView = new PlayerView(this.materials);
@@ -52,6 +57,7 @@ export class Game {
 
   newRun(seed: number = randomSeed()): void {
     this.sim.reset(seed);
+    this.bot.reset();
     this.world.invalidate();
     this.blend.reset(0);
     this.cameraRig.reset();
@@ -76,6 +82,7 @@ export class Game {
   }
 
   private readonly stepSim = (dt: number): void => {
+    if (this.autopilot) this.bot.update();
     this.sim.step(dt);
   };
 
