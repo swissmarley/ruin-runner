@@ -72,11 +72,14 @@ export class Simulation implements CollisionHandler {
     this.reset(seed);
   }
 
-  /** Starts a new run. `startTime` > 0 begins mid-curve (used by tests to probe high speeds). */
-  reset(seed: number, startTime = 0): void {
+  /**
+   * Starts a new run. `startTime` > 0 begins mid-curve (used by tests to probe high speeds);
+   * `tutorial` opens the track with the first-run lessons.
+   */
+  reset(seed: number, startTime = 0, tutorial = false): void {
     this.seed = seed >>> 0;
     this.startS = distanceAtTime(startTime);
-    this.generator.reset(this.seed, this.startS);
+    this.generator.reset(this.seed, this.startS, tutorial);
     this.pool.clear();
     this.player.reset();
     this.powerUps.reset();

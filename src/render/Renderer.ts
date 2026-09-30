@@ -62,7 +62,12 @@ export class Renderer {
     return this.pixelRatio;
   }
 
-  setShadows(enabled: boolean): void {
+  setShadows(enabled: boolean, mapSize = 1024): void {
+    if (enabled && this.sun.shadow.mapSize.x !== mapSize) {
+      this.sun.shadow.mapSize.set(mapSize, mapSize);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
     if (enabled === this.shadows) return;
     this.shadows = enabled;
     this.sun.castShadow = enabled;
@@ -75,6 +80,16 @@ export class Renderer {
         for (const m of mats) m.needsUpdate = true;
       }
     });
+  }
+
+  get shadowsEnabled(): boolean {
+    return this.shadows;
+  }
+
+  setFogFar(far: number): void {
+    const fog = this.scene.fog as THREE.Fog;
+    fog.far = far;
+    fog.near = far * 0.24;
   }
 
   resize(): void {

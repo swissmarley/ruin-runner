@@ -23,9 +23,11 @@ import {
 } from './CoinPlacer';
 import { patternSpan, SLOT_TIME } from './ObstaclePatterns';
 import { PatternPicker, placeCrumble, placePattern } from './PatternPlacer';
+import type { Pattern } from './ObstaclePatterns';
 import type { Segment, SegmentKind } from './Segment';
 import { MAX_SEGMENT_LENGTH, TILE_LENGTH } from './Segment';
 import type { SegmentPool } from './SegmentPool';
+import { HINT_LEAD_SLOTS, patternByName, TUTORIAL_LEAD_SLOTS, TUTORIAL_STEPS } from './Tutorial';
 
 /** The first segment starts behind the player so the camera never sees the track's end. */
 const START_BACKSTOP = 16;
@@ -74,14 +76,20 @@ export class TrackGenerator {
   private cornerNext = false;
   private segmentsSincePowerUp = 0;
   private readonly picker = new PatternPicker();
+  /** Index of the next tutorial lesson (-1 = tutorial off or finished). */
+  private tutorialStep = -1;
+  /** Path distance where the tutorial ends (after its corner); Infinity until known. */
+  tutorialEndS = Number.POSITIVE_INFINITY;
   private readonly ctx: GenContext = { difficulty: 0, speed: 0, cornerNext: false };
 
   constructor(seed: number) {
     this.rng = new Rng(seed);
   }
 
-  reset(seed: number, startS = 0): void {
+  reset(seed: number, startS = 0, tutorial = false): void {
     this.rng.reset(seed);
+    this.tutorialStep = tutorial ? 0 : -1;
+    this.tutorialEndS = tutorial ? Number.POSITIVE_INFINITY : startS;
     this.nextId = 0;
     this.cursorS = startS - START_BACKSTOP;
     this.cursorX = 0;
@@ -124,6 +132,7 @@ export class TrackGenerator {
 
   private wantsBridge(): boolean {
     return (
+      this.tutorialStep < 0 &&
       this.emitted >= START_STRAIGHTS + 2 &&
       this.straightsSinceCorner >= 1 &&
       this.segmentsSinceBridge >= BRIDGE_MIN_GAP &&
@@ -132,6 +141,10 @@ export class TrackGenerator {
   }
 
   private emitStraight(seg: Segment): void {
+    if (this.tutorialStep >= 0 && this.tutorialStep < TUTORIAL_STEPS.length && this.emitted >= 1) {
+      this.emitTutorialStraight(seg);
+      return;
+    }
     const ctx = this.ctx;
     ctx.cornerNext =
       this.emitted >= START_STRAIGHTS &&
@@ -161,6 +174,28 @@ export class TrackGenerator {
     this.maybePowerUp(seg, pattern ? seg.startS + lead * 0.5 : seg.startS + seg.length * 0.5);
 
     this.cornerNext = ctx.cornerNext;
+    this.straightsSinceCorner++;
+    this.segmentsSinceBridge++;
+  }
+
+  /** One scripted first-run lesson: a sign, generous lead-in, then a single obstacle. */
+  private emitTutorialStraight(seg: Segment): void {
+    const step = TUTORIAL_STEPS[this.tutorialStep++]!;
+    const ctx = this.ctx;
+    const slot = SLOT_TIME * ctx.speed;
+    const lead = TUTORIAL_LEAD_SLOTS * slot;
+    const pattern: Pattern | null = step.pattern ? patternByName(step.pattern) : null;
+    const tail = step.cornerAfter ? this.clearTail(ctx.speed) : slot;
+    const span = pattern ? patternSpan(pattern) * slot + PATTERN_TAIL : 0;
+    this.place(seg, 'straight', roundUpToTiles(lead + span + tail));
+    if (pattern) {
+      placePattern(seg, pattern, seg.startS + lead, slot, seg.decoSeed);
+      placePatternCoins(seg, this.rng, pattern, seg.startS + lead, slot, ctx.speed);
+      seg.addHint(seg.startS + lead - HINT_LEAD_SLOTS * slot, step.hint);
+    } else {
+      seg.addHint(seg.endS - tail - slot * 0.6, step.hint);
+    }
+    this.cornerNext = step.cornerAfter;
     this.straightsSinceCorner++;
     this.segmentsSinceBridge++;
   }
@@ -202,6 +237,10 @@ export class TrackGenerator {
     else if (this.heading === 3) dir = 1;
     else dir = this.rng.chance(0.5) ? -1 : 1;
     this.place(seg, dir < 0 ? 'cornerLeft' : 'cornerRight', CORNER_SIZE);
+    if (this.tutorialStep >= TUTORIAL_STEPS.length) {
+      this.tutorialStep = -1;
+      this.tutorialEndS = seg.endS;
+    }
     this.straightsSinceCorner = 0;
     this.segmentsSinceBridge++;
   }

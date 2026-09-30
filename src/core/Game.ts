@@ -5,10 +5,9 @@ import { GameView } from '../render/GameView';
 import { Bot } from '../sim/Bot';
 import type { Dir } from '../sim/InputBuffer';
 import { Simulation } from '../sim/Simulation';
-import { GameOver } from '../ui/GameOver';
-import { Hud } from '../ui/Hud';
-import { Menu } from '../ui/Menu';
-import { Pause } from '../ui/Pause';
+import type { Settings } from '../storage/SaveData';
+import { SaveData } from '../storage/SaveData';
+import { Screens } from '../ui/Screens';
 import { Feedback } from './Feedback';
 import { FixedStepLoop, RafDriver } from './GameLoop';
 import { Haptics } from './Haptics';
@@ -19,55 +18,49 @@ import { StateMachine } from './StateMachine';
 /** Seconds of death animation before the Game Over card appears. */
 const DEATH_DELAY = 1.0;
 
-/** Top-level glue: state machine, fixed-step loop, simulation, view, input and UI. */
+/** Top-level glue: state machine, fixed-step loop, simulation, view, input, audio and UI. */
 export class Game {
   readonly states = new StateMachine();
   readonly sim: Simulation;
+  readonly save = new SaveData();
+  readonly audio = new AudioManager();
+  readonly haptics = new Haptics();
   private readonly view: GameView;
+  private readonly screens: Screens;
+  private readonly feedback: Feedback;
   private readonly loop = new FixedStepLoop(DT, MAX_STEPS_PER_FRAME);
   private readonly driver: RafDriver;
   private readonly input: InputManager;
   private readonly bot: Bot;
-  private readonly menu: Menu;
-  private readonly gameOver: GameOver;
-  private readonly hud: Hud;
-  private readonly pause: Pause;
-  readonly audio = new AudioManager();
-  readonly haptics = new Haptics();
-  private readonly feedback: Feedback;
   /** When true the perfect-play bot drives the runner (attract mode / smoke tests). */
   autopilot = false;
   private deathTimer = 0;
-  private best = 0;
+  private tutorialRun = false;
 
   constructor(container: HTMLElement) {
     this.sim = new Simulation(randomSeed());
     this.bot = new Bot(this.sim);
     this.view = new GameView(container, this.sim);
     this.feedback = new Feedback(this.view, this.audio, this.haptics);
-    const ui = document.createElement('div');
-    ui.className = 'ui-layer';
-    container.appendChild(ui);
-    this.menu = new Menu(ui, {
-      onPlay: () => this.play(),
-      onSettings: () => {},
-    });
-    this.hud = new Hud(ui, () => this.togglePause());
-    this.pause = new Pause(ui, {
-      onResume: () => this.togglePause(),
-      onMenu: () => this.toMenu(),
-    });
-    this.gameOver = new GameOver(ui, {
-      onRetry: () => this.play(),
-      onMenu: () => this.toMenu(),
-    });
+    this.screens = new Screens(
+      container,
+      {
+        play: () => this.play(),
+        toMenu: () => this.toMenu(),
+        togglePause: () => this.togglePause(),
+        changeSettings: (patch) => this.changeSettings(patch),
+        replayTutorial: () => this.save.setTutorialDone(false),
+      },
+      () => this.save.state,
+    );
     this.input = new InputManager(container, {
       onDirection: (dir) => this.onDirection(dir),
       onPause: () => this.togglePause(),
-      onDebugToggle: () => {},
+      onDebugToggle: () => this.view.toggleDebug(),
     });
-    this.states.onChange((to, from) => this.onStateChange(to, from));
+    this.states.onChange((to) => this.onStateChange(to));
     this.driver = new RafDriver((dt) => this.frame(dt));
+    this.applySettings(this.save.state.settings);
     // Mobile browsers only allow audio to start inside a user gesture.
     const unlock = (): void => this.audio.unlock();
     for (const type of ['pointerdown', 'touchend', 'keydown']) {
@@ -76,32 +69,27 @@ export class Game {
     document.addEventListener('visibilitychange', () => this.onVisibility());
   }
 
-  private onVisibility(): void {
-    const hidden = document.visibilityState === 'hidden';
-    if (hidden && this.states.state === 'Playing' && this.sim.alive) this.states.go('Paused');
-    this.audio.setSuspended(hidden);
-  }
-
   start(): void {
     this.driver.start();
     this.startAttract();
     this.states.go('Menu');
   }
 
+  get state(): GameState {
+    return this.states.state;
+  }
+
   /** Starts a fresh player-controlled run (also used for instant Retry). */
   play(seed: number = randomSeed()): void {
     this.autopilot = false;
-    this.resetRun(seed);
+    this.tutorialRun = !this.save.state.tutorialDone;
+    this.resetRun(seed, this.tutorialRun);
     this.states.go('Playing');
   }
 
   toMenu(): void {
     this.startAttract();
     this.states.go('Menu');
-  }
-
-  get state(): GameState {
-    return this.states.state;
   }
 
   togglePause(): void {
@@ -115,29 +103,44 @@ export class Game {
     for (let i = 0; i < frames; i++) this.frame(1 / 60);
   }
 
-  private startAttract(): void {
-    this.autopilot = true;
-    this.resetRun(randomSeed());
+  private changeSettings(patch: Partial<Settings>): void {
+    this.save.updateSettings(patch);
+    this.applySettings(this.save.state.settings);
+    this.audio.play('click');
   }
 
-  private resetRun(seed: number): void {
-    this.sim.reset(seed);
+  private applySettings(s: Settings): void {
+    this.audio.setSfxEnabled(s.sound);
+    this.audio.setMusicEnabled(s.music);
+    this.haptics.enabled = s.haptics;
+    this.view.setQuality(s.quality);
+  }
+
+  private onVisibility(): void {
+    const hidden = document.visibilityState === 'hidden';
+    if (hidden && this.states.state === 'Playing' && this.sim.alive) this.states.go('Paused');
+    this.audio.setSuspended(hidden);
+  }
+
+  private startAttract(): void {
+    this.autopilot = true;
+    this.tutorialRun = false;
+    this.resetRun(randomSeed(), false);
+  }
+
+  private resetRun(seed: number, tutorial: boolean): void {
+    this.sim.reset(seed, 0, tutorial);
     this.bot.reset();
     this.view.reset();
     this.loop.reset();
-    this.hud.reset();
+    this.screens.resetHud();
     this.deathTimer = 0;
   }
 
-  private onStateChange(to: GameState, _from: GameState): void {
-    this.menu.root.classList.toggle('hidden', to !== 'Menu');
-    if (to !== 'GameOver') this.gameOver.hide();
-    this.pause.root.classList.toggle('hidden', to !== 'Paused');
-    if (to === 'Playing' || to === 'Paused') this.hud.show();
-    else this.hud.hide();
+  private onStateChange(to: GameState): void {
+    this.screens.onState(to);
     this.input.setEnabled(to === 'Playing');
     this.audio.setMusicMode(to === 'Playing' ? 'run' : 'menu');
-    if (to === 'Menu') this.menu.setRecords(this.best, 0);
   }
 
   private onDirection(dir: Dir): void {
@@ -153,16 +156,23 @@ export class Game {
     this.input.pollGamepads();
     const state = this.states.state;
     const running = state === 'Playing' || state === 'Menu';
+    const audible = state === 'Playing' && !this.autopilot;
     let alpha = 1;
     if (running) {
       alpha = this.loop.advance(dt, this.stepSim);
-      this.feedback.drain(this.sim.events, state === 'Playing' && !this.autopilot);
+      this.feedback.drain(this.sim.events, audible);
       if (!this.sim.alive) this.afterDeath(dt, state);
     }
-    const audible = state === 'Playing' && !this.autopilot;
     if (this.view.draw(running ? dt : 0, alpha)) this.feedback.crumble(audible);
+    this.view.debugTick(dt);
     this.audio.update(dt, this.sim.pursuer.closeness, audible && this.sim.alive);
-    if (state === 'Playing') this.hud.update(this.sim);
+    if (state === 'Playing') {
+      this.screens.updateHud(this.sim);
+      if (this.tutorialRun && this.sim.s > this.sim.generator.tutorialEndS) {
+        this.tutorialRun = false;
+        this.save.setTutorialDone(true);
+      }
+    }
   }
 
   private afterDeath(dt: number, state: GameState): void {
@@ -172,16 +182,19 @@ export class Game {
       this.startAttract();
       return;
     }
-    const score = this.sim.scoring.total;
-    const newBest = score > this.best;
-    this.best = Math.max(this.best, score);
+    const sc = this.sim.scoring;
+    const newBest = this.save.recordRun({
+      score: sc.total,
+      coins: sc.coins,
+      distance: this.sim.distance,
+    });
     this.states.go('GameOver');
-    this.gameOver.present({
+    this.screens.showGameOver({
       cause: this.sim.deathCause,
-      score,
-      best: this.best,
+      score: sc.total,
+      best: this.save.state.highScore,
       newBest,
-      coins: this.sim.scoring.coins,
+      coins: sc.coins,
       distance: this.sim.distance,
     });
   }

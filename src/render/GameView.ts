@@ -1,6 +1,8 @@
 import { CRUMBLE_GAP_LENGTH } from '../config';
 import type { Simulation } from '../sim/Simulation';
 import type { SimEventType } from '../sim/SimEvents';
+import type { QualitySetting } from '../storage/SaveData';
+import { DebugOverlay } from '../ui/DebugOverlay';
 import { segmentAt, WorldPoint, worldAt } from '../world/Track';
 import { CameraRig } from './CameraRig';
 import { CollectiblesView } from './CollectiblesView';
@@ -8,10 +10,13 @@ import { CrumbleView } from './CrumbleView';
 import { DecorView } from './DecorView';
 import { Effects } from './Effects';
 import { Environment } from './Environment';
+import { HintView } from './HintView';
 import { Materials } from './Materials';
 import { ObstacleView } from './ObstacleView';
 import { PlayerView } from './PlayerView';
 import { PursuerView } from './PursuerView';
+import type { QualityLevel } from './Quality';
+import { applyQuality, initialLevel } from './Quality';
 import { Renderer } from './Renderer';
 import { TurnBlend } from './TurnBlend';
 import { WorldView } from './WorldView';
@@ -34,11 +39,17 @@ export class GameView {
   private readonly pursuerView: PursuerView;
   private readonly collectibles: CollectiblesView;
   private readonly effects = new Effects();
+  private readonly hints = new HintView();
+  private readonly debug: DebugOverlay;
+  private quality: QualityLevel = 'high';
+  /** True when the player chose "Auto" quality (the adaptive controller may change it). */
+  autoQuality = true;
   private readonly cameraRig: CameraRig;
   private readonly blend = new TurnBlend();
   private readonly wp = new WorldPoint();
   private deathTime = 0;
   private dustTimer = 0;
+  private clock = 0;
   private px = 0;
   private py = 0;
   private pz = 0;
@@ -67,10 +78,30 @@ export class GameView {
       this.playerView.root,
       this.pursuerView.root,
       this.effects.points,
+      this.hints.group,
     );
+    this.debug = new DebugOverlay(container);
     this.renderer.onResize = (h) => this.effects.setViewportHeight(h);
     this.effects.setViewportHeight(this.renderer.gl.domElement.height);
     window.addEventListener('resize', () => this.renderer.resize());
+  }
+
+  setQuality(setting: QualitySetting): void {
+    this.autoQuality = setting === 'auto';
+    this.setQualityLevel(initialLevel(setting));
+  }
+
+  setQualityLevel(level: QualityLevel): void {
+    this.quality = level;
+    applyQuality(this.renderer, level);
+  }
+
+  get qualityLevel(): QualityLevel {
+    return this.quality;
+  }
+
+  toggleDebug(): void {
+    this.debug.toggle();
   }
 
   /** Call after `sim.reset()` so every view rebuilds from the new track. */
@@ -166,6 +197,8 @@ export class GameView {
     this.pursuerView.update(dt, sim, alpha, runnerS);
     this.runningDust(dt);
     this.effects.update(dt);
+    this.clock += dt;
+    this.hints.update(sim, this.clock);
 
     const camY = sim.alive ? py : Math.max(py, -1.5);
     this.cameraRig.update(dt, px, camY, pz, this.blend.yaw, lateral, sim.pursuer.closeness);
@@ -175,6 +208,26 @@ export class GameView {
     this.renderer.render();
     return crumbled;
   }
+
+  /** Feeds the debug overlay with real (unscaled) frame time. */
+  debugTick(realDt: number): void {
+    this.debug.tick(realDt, this.debugStats);
+  }
+
+  private readonly debugStats = () => {
+    const info = this.renderer.gl.info.render;
+    return {
+      fps: 0,
+      frameMs: 0,
+      calls: info.calls,
+      triangles: info.triangles,
+      segments: this.sim.pool.count,
+      speed: this.sim.speed,
+      seed: this.sim.seed,
+      quality: this.autoQuality ? `auto:${this.quality}` : this.quality,
+      pixelRatio: this.renderer.getPixelRatio(),
+    };
+  };
 
   private runningDust(dt: number): void {
     const p = this.sim.player;
