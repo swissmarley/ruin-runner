@@ -1,139 +1,113 @@
-import * as THREE from 'three';
+import type * as THREE from 'three';
+import { DT } from '../config';
 import type { Player } from '../entities/Player';
-import { mergeParts, part } from './Geometry';
+import type { ExplorerRig } from './character/ExplorerModel';
+import { buildExplorer } from './character/ExplorerModel';
+import type { Pose } from './character/Pose';
+import {
+  approach,
+  blendPose,
+  createPose,
+  fallenPose,
+  J,
+  jumpPose,
+  runPose,
+  slidePose,
+} from './character/Pose';
 import type { Materials } from './Materials';
 
-const JACKET = 0x2f7f86;
-const SKIN = 0xd9a877;
-const HAT = 0x7a5a36;
-const SCARF = 0xe0662c;
-const PACK = 0x8a6a3e;
-const PANTS = 0x3b3f4f;
-const BOOT = 0x3a2616;
-const BELT = 0x4a3524;
-
-function buildBody(): THREE.BufferGeometry {
-  const box = new THREE.BoxGeometry(1, 1, 1);
-  const cyl = new THREE.CylinderGeometry(1, 1, 1, 8);
-  const parts = [
-    part(box, JACKET, { y: 1.26, sx: 0.5, sy: 0.62, sz: 0.3 }),
-    part(box, BELT, { y: 0.97, sx: 0.52, sy: 0.09, sz: 0.32 }),
-    part(box, SKIN, { y: 1.76, sx: 0.32, sy: 0.34, sz: 0.3 }),
-    part(box, 0x2a1d14, { y: 1.8, z: 0.06, sx: 0.34, sy: 0.3, sz: 0.24 }),
-    part(cyl, HAT, { y: 1.93, sx: 0.36, sy: 0.035, sz: 0.36 }),
-    part(cyl, HAT, { y: 2.02, sx: 0.2, sy: 0.16, sz: 0.2 }),
-    part(box, SCARF, { y: 1.56, sx: 0.4, sy: 0.1, sz: 0.34 }),
-    part(box, SCARF, { x: 0.1, y: 1.4, z: 0.19, rz: 0.2, sx: 0.1, sy: 0.3, sz: 0.04 }),
-    part(box, PACK, { y: 1.28, z: 0.24, sx: 0.4, sy: 0.46, sz: 0.18 }),
-    part(cyl, 0x9c3b2a, { y: 1.56, z: 0.24, rz: Math.PI / 2, sx: 0.09, sy: 0.44, sz: 0.09 }),
-  ];
-  const g = mergeParts(parts);
-  box.dispose();
-  cyl.dispose();
-  return g;
-}
-
-function buildLimb(
-  upper: number,
-  lower: number,
-  length: number,
-  width: number,
-): THREE.BufferGeometry {
-  const box = new THREE.BoxGeometry(1, 1, 1);
-  const upperLen = length * 0.78;
-  const g = mergeParts([
-    part(box, upper, { y: -upperLen / 2, sx: width, sy: upperLen, sz: width }),
-    part(box, lower, {
-      y: -upperLen - (length - upperLen) / 2,
-      sx: width * 1.05,
-      sy: length - upperLen,
-      sz: width * 1.25,
-    }),
-  ]);
-  box.dispose();
-  return g;
-}
-
-/** The explorer: one merged body mesh plus four pivoting limbs (5 draw calls). */
+/**
+ * The explorer: a jointed rig driven by blended procedural poses (run cycle, leap, power
+ * slide, collapse), with banking on lane changes and a fluttering scarf.
+ */
 export class PlayerView {
-  readonly root = new THREE.Group();
-  private readonly pose = new THREE.Group();
-  private readonly armL: THREE.Mesh;
-  private readonly armR: THREE.Mesh;
-  private readonly legL: THREE.Mesh;
-  private readonly legR: THREE.Mesh;
+  readonly root: THREE.Group;
+  private readonly rig: ExplorerRig;
+  private readonly run = createPose();
+  private readonly air = createPose();
+  private readonly slide = createPose();
+  private readonly fallen = createPose();
+  private readonly pose = createPose();
   private phase = 0;
+  private time = 0;
   private stumbleTime = 0;
+  private wAir = 0;
+  private wSlide = 0;
+  private wDead = 0;
+  private rise = 1;
+  private bank = 0;
 
   constructor(materials: Materials) {
-    const mat = materials.vertexColored;
-    const body = new THREE.Mesh(buildBody(), mat);
-    const armGeo = buildLimb(JACKET, SKIN, 0.62, 0.14);
-    const legGeo = buildLimb(PANTS, BOOT, 0.93, 0.18);
-    this.armL = new THREE.Mesh(armGeo, mat);
-    this.armR = new THREE.Mesh(armGeo, mat);
-    this.legL = new THREE.Mesh(legGeo, mat);
-    this.legR = new THREE.Mesh(legGeo, mat);
-    this.armL.position.set(-0.33, 1.52, 0);
-    this.armR.position.set(0.33, 1.52, 0);
-    this.legL.position.set(-0.13, 0.93, 0);
-    this.legR.position.set(0.13, 0.93, 0);
-    this.pose.add(body, this.armL, this.armR, this.legL, this.legR);
-    this.root.add(this.pose);
-    for (const m of [body, this.armL, this.armR, this.legL, this.legR]) m.castShadow = true;
+    this.rig = buildExplorer(materials.character);
+    this.root = this.rig.root;
+    fallenPose(this.fallen);
   }
 
   stumble(): void {
     this.stumbleTime = 0.45;
   }
 
-  /** Poses the rig for the current frame. */
+  /** Poses the rig for the current frame. `alive` false plays the collapse. */
   update(dt: number, player: Player, speed: number, alive: boolean): void {
-    if (!alive) {
-      this.pose.rotation.x = Math.min(this.pose.rotation.x + dt * 6, 1.45);
-      this.pose.position.y = Math.max(this.pose.position.y - dt * 2, -0.2);
-      return;
-    }
-    this.phase += dt * (2.4 + speed * 0.12) * Math.PI * 2;
-    const swing = Math.sin(this.phase);
+    this.time += dt;
+    this.phase += dt * (2.0 + speed * 0.085) * Math.PI * 2;
     this.stumbleTime = Math.max(0, this.stumbleTime - dt);
-    const wobble = this.stumbleTime > 0 ? Math.sin(this.stumbleTime * 40) * 0.25 : 0;
 
-    const pose = this.pose;
-    pose.rotation.set(0, 0, wobble);
-    pose.position.y = 0;
+    const airborne = player.vertical === 'jump' || player.y > 0.05;
+    const sliding = !airborne && player.vertical === 'slide';
+    const vy = player.y - player.prevY;
+    this.rise = approach(this.rise, vy > 0 ? 1 : 0, 10, dt);
+    this.wAir = approach(this.wAir, airborne ? 1 : 0, airborne ? 22 : 16, dt);
+    this.wSlide = approach(this.wSlide, sliding ? 1 : 0, 20, dt);
+    this.wDead = approach(this.wDead, alive ? 0 : 1, 7, dt);
+    const vx = (player.x - player.prevX) / DT;
+    this.bank = approach(this.bank, Math.max(-0.3, Math.min(0.3, -vx * 0.03)), 14, dt);
 
-    if (player.vertical === 'slide' && player.y <= 0.05) {
-      pose.rotation.x = 1.15;
-      pose.position.y = 0.32;
-      pose.position.z = 0.2;
-      this.armL.rotation.set(-2.6, 0, 0.3);
-      this.armR.rotation.set(-2.6, 0, -0.3);
-      this.legL.rotation.set(0.2, 0, 0);
-      this.legR.rotation.set(-0.1, 0, 0);
-      return;
+    runPose(this.run, this.phase);
+    jumpPose(this.air, this.rise);
+    slidePose(this.slide, this.time);
+    const p = this.pose;
+    blendPose(p, this.run, this.air, this.wAir);
+    blendPose(p, p, this.slide, this.wSlide);
+    blendPose(p, p, this.fallen, this.wDead);
+    if (this.stumbleTime > 0) {
+      const w = Math.sin(this.stumbleTime * 40) * this.stumbleTime;
+      p[J.spineRZ] = p[J.spineRZ]! + w * 0.6;
+      p[J.spineRX] = p[J.spineRX]! - this.stumbleTime * 0.6;
+      p[J.headRX] = p[J.headRX]! + w * 0.5;
     }
-    pose.position.z = 0;
-    if (player.vertical === 'jump' || player.y > 0.05) {
-      pose.rotation.x = -0.15;
-      this.armL.rotation.set(-2.4, 0, 0.25);
-      this.armR.rotation.set(-2.2, 0, -0.25);
-      this.legL.rotation.set(0.9, 0, 0);
-      this.legR.rotation.set(-0.35, 0, 0);
-      return;
-    }
-    // Running: forward lean, alternating limbs, a little bounce.
-    pose.rotation.x = -0.12;
-    pose.position.y = Math.abs(swing) * 0.07;
-    this.armL.rotation.set(swing * 0.9, 0, 0.08);
-    this.armR.rotation.set(-swing * 0.9, 0, -0.08);
-    this.legL.rotation.set(-swing * 0.95, 0, 0);
-    this.legR.rotation.set(swing * 0.95, 0, 0);
+    p[J.bodyRZ] = p[J.bodyRZ]! + this.bank * (1 - this.wDead);
+    this.apply(p);
+  }
+
+  private apply(p: Pose): void {
+    const r = this.rig;
+    r.body.position.y = p[J.bodyY]!;
+    r.body.rotation.set(p[J.bodyRX]!, 0, p[J.bodyRZ]!);
+    r.hips.rotation.set(p[J.hipsRX]!, p[J.hipsRY]!, p[J.hipsRZ]!);
+    r.spine.rotation.set(p[J.spineRX]!, p[J.spineRY]!, p[J.spineRZ]!);
+    r.head.rotation.set(p[J.headRX]!, p[J.headRY]!, 0);
+    r.shoulderL.rotation.set(p[J.shLX]!, 0, p[J.shLZ]!);
+    r.shoulderR.rotation.set(p[J.shRX]!, 0, p[J.shRZ]!);
+    r.elbowL.rotation.x = p[J.elL]!;
+    r.elbowR.rotation.x = p[J.elR]!;
+    r.thighL.rotation.set(p[J.thL]!, 0, p[J.thLZ]!);
+    r.thighR.rotation.set(p[J.thR]!, 0, p[J.thRZ]!);
+    r.kneeL.rotation.x = p[J.knL]!;
+    r.kneeR.rotation.x = p[J.knR]!;
+    r.ankleL.rotation.x = p[J.anL]!;
+    r.ankleR.rotation.x = p[J.anR]!;
+    // Scarf streams behind, flapping in the wind.
+    const t = this.time;
+    r.scarf1.rotation.set(-0.3 + Math.sin(t * 17) * 0.15, Math.sin(t * 7) * 0.25, 0);
+    r.scarf2.rotation.set(0.25 + Math.sin(t * 17 - 1.2) * 0.35, Math.sin(t * 9 - 0.6) * 0.3, 0);
   }
 
   resetPose(): void {
-    this.pose.rotation.set(0, 0, 0);
-    this.pose.position.set(0, 0, 0);
     this.stumbleTime = 0;
+    this.wAir = 0;
+    this.wSlide = 0;
+    this.wDead = 0;
+    this.bank = 0;
   }
 }

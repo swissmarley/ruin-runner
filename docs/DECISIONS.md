@@ -105,9 +105,9 @@ Short log of choices made without asking. Newest at the bottom of each section.
 
 - **Look:** walkways floating over a misty jungle chasm. Sunken columns rise from the depths
   beside the path, piers hold the walkway up, torches line the curbs, gateway arches mark some
-  straights, guardian statues watch the corners. Warm low sun + cool hemisphere light, fog
-  matched to a hazy horizon on a vertex-coloured sky dome. Everything is flat-shaded Lambert
-  with vertex colours (merged primitives), no textures.
+  straights, guardian heads watch the corners. Low golden-hour sun behind the runner's right,
+  sky-derived image-based lighting, fog matched to the horizon haze of a shader sky dome.
+  (Superseded the original flat-shaded Lambert look; see "Visual overhaul" below.)
 - **Instance allocator:** `SlotInstances` hands out instance indices per segment slot from a
   LIFO free list; `mesh.count` is the high-water mark. Reserving worst-case ranges per slot
   made the GPU process ~1.4 M triangles of zero-scale instances; the allocator brings a typical
@@ -184,3 +184,50 @@ Short log of choices made without asking. Newest at the bottom of each section.
 - Tilt is sampled once per rendered frame rather than queued per tick, so tilt runs are not
   bit-reproducible from seed + inputs. This is acceptable for an optional mode; lane mode
   stays deterministic.
+
+## Visual overhaul (PBR pass)
+
+- **Why:** the flat-shaded, box-built models read as "Minecraft". Everything is still procedural
+  (no model or image files, no new dependencies — post-processing and geometry helpers come
+  from `three/addons`, which ship inside `three`).
+- **One surface shader for every solid.** `MeshStandardMaterial` patched via `onBeforeCompile`
+  (`render/art/Surface.ts`). A per-vertex `surf` attribute selects the kind (stone, masonry,
+  column drum, wood, bark, iron, gold, leaf, cloth, skin, leather, glow, runestone), so merged
+  meshes keep one draw call. It samples one generated 256² RGBA noise texture tri-planar at
+  three scales (9 fetches) for tint, grain, Worley cracks and moss blotches, draws masonry
+  joints / drum bands procedurally in world space (headings are axis-aligned, so a world grid
+  lines up with the path), adds moss on upward faces and in joints, and bump-maps the result
+  from a height in meters via screen-space derivatives. World-space for static ruins;
+  object-space (`SURF_OBJECT`) for the explorer and Warden so patterns don't swim.
+- **Depth fog in the surface shader:** geometry below the walkway fades to the fog color with
+  depth (`uDepthFog`), and the sky below the horizon is exactly the fog color, so the gorge
+  reads as bottomless mist without extra transparent layers (two thin noise-mist planes add
+  drift on top).
+- **Lighting:** ACES filmic tone mapping, sun 3.0 + hemisphere 0.35 + a PMREM environment map
+  rendered once from the sky shader (`environmentIntensity` 0.55) for reflections — the gold
+  coins are fully metallic and rely on it.
+- **Post chain (medium/high):** half-float target → Unreal bloom (threshold 1.15, so only
+  emissives, flames, the sun and gold highlights glow) → linear-HDR grade (saturation, split
+  toning, vignette) → OutputPass (tone map + sRGB) → FXAA. MSAA on the half-float target cost
+  more than the rest of the chain combined (measured 9.0 → 3.7 ms), so it is replaced by
+  FXAA, and bloom runs at quarter resolution. Low quality renders straight to the canvas
+  (renderer MSAA + tone mapping, no bloom/grade).
+- **Explorer:** jointed rig (hips, spine, head, shoulders/elbows, thighs/knees/ankles, two
+  scarf segments; 13 draw calls) of capsules, lathes and rounded boxes, smooth-shaded. Poses
+  are pure joint-angle arrays (`render/character/Pose.ts`, unit-tested): a run cycle with knee
+  tuck in the swing phase, flat foot in stance, counter-rotating hips/shoulders and a
+  double-bounce; a knee-drive leap; a lean-back power slide (head stays < ~0.95 m, under the
+  beam); a face-down collapse. Pose weights blend exponentially, so state changes never pop.
+  Lane changes bank the body.
+- **Stone Warden:** boulders are displaced icospheres sliced by random planes (chiselled,
+  not blobby). Back plates use the `runestone` surface: Worley-edge ember veins whose glow
+  pulses with each step and brightens as the Warden closes in.
+- **Foliage:** a canvas-painted atlas (fern frond + broad leaf), alpha-tested, double-sided,
+  wind sway in the vertex shader. Alpha is boosted by mip level so thin fronds don't vanish
+  at a distance (the classic alpha-test mip problem — ferns were invisible before this).
+  Ferns sprout on curbs, vines hang off the walkway and column capitals, broad-leaf clumps sit
+  on column tops and guardian heads.
+- **Budget (M-series Mac, 390×844 portrait, GPU-synced):** high (2× DPR, bloom, 2048 shadows)
+  ~7.3 ms, medium ~3.3 ms, low ~1.8 ms; ~75 draw calls; 300–370 k triangles including the
+  shadow pass. Hidden power-up instances are no longer drawn (`mesh.count` = live count).
+  Bundle: 198 KB gzip (was 167 KB).

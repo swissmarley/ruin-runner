@@ -4,7 +4,7 @@ import { DIR_X, DIR_Z, headingYaw, rightOf } from '../world/Heading';
 import type { Segment } from '../world/Segment';
 import { MAX_SEGMENT_LENGTH, TILE_LENGTH } from '../world/Segment';
 import type { SegmentPool } from '../world/SegmentPool';
-import { hash01 } from './Geometry';
+import { hash01, roundedBox, SURF, withSurf } from './Geometry';
 import type { Materials } from './Materials';
 import { PALETTE } from './Materials';
 import { SlotInstances } from './SlotInstances';
@@ -32,10 +32,23 @@ export class WorldView {
   private readonly builtIds: Int32Array;
 
   constructor(materials: Materials, slots: number) {
-    const box = new THREE.BoxGeometry(1, 1, 1);
-    this.floor = new SlotInstances(box, materials.instanced, slots, PER_SLOT_FLOOR, true);
-    this.planks = new SlotInstances(box, materials.instanced, slots, PER_SLOT_FLOOR * 3, true);
-    this.curbs = new SlotInstances(box, materials.instanced, slots, PER_SLOT_CURB, true);
+    const box = () => new THREE.BoxGeometry(1, 1, 1);
+    const mat = materials.track;
+    this.floor = new SlotInstances(withSurf(box(), SURF.masonry), mat, slots, PER_SLOT_FLOOR, true);
+    this.planks = new SlotInstances(
+      withSurf(box(), SURF.wood),
+      mat,
+      slots,
+      PER_SLOT_FLOOR * 3,
+      true,
+    );
+    this.curbs = new SlotInstances(
+      withSurf(roundedBox(1, 1, 1, 0.07, 1), SURF.masonry),
+      mat,
+      slots,
+      PER_SLOT_CURB,
+      true,
+    );
     this.floor.mesh.receiveShadow = true;
     this.planks.mesh.receiveShadow = true;
     this.group.add(this.floor.mesh, this.planks.mesh, this.curbs.mesh);
@@ -117,7 +130,7 @@ export class WorldView {
     for (const side of [-1, 1]) {
       const x = side * (TRACK_HALF_WIDTH + 0.25);
       this.place(seg, mid, x, 0.1, 0.5, 1.0, len - 0.1);
-      c.setHex(r > 0.6 ? PALETTE.moss : PALETTE.stoneDark).offsetHSL(0, 0, (r - 0.5) * 0.06);
+      c.setHex(r > 0.6 ? PALETTE.stone : PALETTE.stoneDark).offsetHSL(0, 0, (r - 0.5) * 0.06);
       this.curbs.push(m, c);
     }
   }

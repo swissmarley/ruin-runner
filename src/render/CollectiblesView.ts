@@ -43,17 +43,29 @@ export class CollectiblesView {
 
   constructor(slots: number) {
     this.slots = slots;
-    const coinMat = new THREE.MeshLambertMaterial({
+    const coinMat = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      flatShading: true,
+      metalness: 1,
+      roughness: 0.26,
       emissive: PALETTE.goldDark,
-      emissiveIntensity: 0.35,
+      emissiveIntensity: 0.22,
     });
     addInstanceSpin(coinMat, this.time, 3.2);
     this.coins = new SlotInstances(coinGeometry(), coinMat, slots, MAX_COINS, false);
     this.group.add(this.coins.mesh);
     this.coinIndex = new Int32Array(slots * MAX_COINS).fill(-1);
-    const orbMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+    const orbMat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      metalness: 0.3,
+      roughness: 0.2,
+    });
+    orbMat.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <emissivemap_fragment>',
+        '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * 1.6;',
+      );
+    };
+    orbMat.customProgramCacheKey = () => 'orb-glow';
     this.pickups = {
       magnet: this.instanced(magnetGeometry(), orbMat, slots * MAX_PICKUPS),
       shield: this.instanced(shieldGeometry(), orbMat, slots * MAX_PICKUPS),
@@ -152,7 +164,8 @@ export class CollectiblesView {
           mesh.setMatrixAt(n++, m);
         }
       }
-      for (let i = n; i < mesh.count; i++) mesh.setMatrixAt(i, ZERO);
+      // Only live pickups are drawn (a handful at most).
+      mesh.count = n;
       mesh.instanceMatrix.needsUpdate = true;
     }
   }

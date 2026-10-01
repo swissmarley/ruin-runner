@@ -30,7 +30,7 @@ export class CrumbleView {
   private t = 0;
 
   constructor(materials: Materials) {
-    this.mesh = new THREE.InstancedMesh(plank(), materials.vertexColored, PLANKS);
+    this.mesh = new THREE.InstancedMesh(plank(), materials.stone, PLANKS);
     this.mesh.frustumCulled = false;
     this.mesh.castShadow = true;
     this.hideAll();

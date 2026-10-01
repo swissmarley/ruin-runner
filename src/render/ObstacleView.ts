@@ -43,7 +43,7 @@ export class ObstacleView {
   private readonly hidden: Uint8Array;
 
   constructor(materials: Materials, slots: number) {
-    const mat = materials.vertexColored;
+    const mat = materials.stone;
     this.rubble = new SlotInstances(rubbleBarrier(), mat, slots, PER_SLOT, false);
     this.beams = new SlotInstances(beamBlock(), mat, slots, MAX_OBSTACLES, false);
     this.posts = new SlotInstances(beamPost(), mat, slots, MAX_OBSTACLES * 2, false);

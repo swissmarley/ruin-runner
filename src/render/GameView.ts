@@ -31,7 +31,7 @@ const STEP_DUST_INTERVAL = 0.14;
 export class GameView {
   readonly renderer: Renderer;
   private readonly materials = new Materials();
-  private readonly environment = new Environment();
+  private readonly environment: Environment;
   private readonly world: WorldView;
   private readonly decor: DecorView;
   private readonly obstacles: ObstacleView;
@@ -60,7 +60,8 @@ export class GameView {
     container: HTMLElement,
     private readonly sim: Simulation,
   ) {
-    this.renderer = new Renderer(container);
+    this.renderer = new Renderer(container, this.materials.detail);
+    this.environment = new Environment(this.materials.detail);
     const slots = sim.pool.capacity;
     this.world = new WorldView(this.materials, slots);
     this.decor = new DecorView(this.materials, slots);
@@ -83,8 +84,11 @@ export class GameView {
       this.hints.group,
     );
     this.debug = new DebugOverlay(container);
-    this.renderer.onResize = (h) => this.effects.setViewportHeight(h);
-    this.effects.setViewportHeight(this.renderer.gl.domElement.height);
+    this.renderer.onResize = (h) => {
+      this.effects.setViewportHeight(h);
+      this.environment.setViewportHeight(h);
+    };
+    this.renderer.onResize(this.renderer.gl.domElement.height);
     window.addEventListener('resize', () => this.renderer.resize());
   }
 
@@ -169,7 +173,7 @@ export class GameView {
   }
 
   private readonly onCoinCollected = (x: number, y: number, z: number): void => {
-    this.effects.burst(x, y, z, 7, 0xffe07a, 2.6, 0.32, 0.35, 0.1, 0.5);
+    this.effects.burst(x, y, z, 7, 0xffe07a, 2.6, 0.16, 0.35, 0.1, 0.5);
   };
 
   /** Returns true if the crumbling bridge started collapsing this frame. */
@@ -207,7 +211,7 @@ export class GameView {
     const camY = sim.alive ? py : Math.max(py, -1.5);
     this.cameraRig.update(dt, px, camY, pz, this.blend.yaw, lateral, sim.pursuer.closeness);
     const cam = this.renderer.camera.position;
-    this.environment.follow(cam.x, cam.z);
+    this.environment.follow(dt, cam.x, cam.y, cam.z);
     this.renderer.followSun(px, pz);
     this.renderer.render();
     return crumbled;

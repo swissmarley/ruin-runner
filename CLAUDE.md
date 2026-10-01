@@ -55,7 +55,9 @@ src/
   systems/             Physics (AABB), Collision, Scoring, Difficulty
   sim/                 Simulation (one tick of game logic), Bot (perfect-play planner)
   input/               InputManager, SwipeDetector
-  render/              Renderer, CameraRig, Materials, Effects, WorldView, *View, Quality
+  render/              Renderer, PostFX, CameraRig, Materials, Effects, WorldView, *View, Quality
+    art/               Surface shader, detail/leaf textures, Sky, Shapes, Vegetation
+    character/         Explorer + Warden models, Pose (pure joint-angle animation)
   audio/               AudioManager, Sfx, Music
   ui/                  Hud, Menu, GameOver, Settings, Pause, DebugOverlay
   storage/             SaveData
@@ -122,3 +124,9 @@ docs/DECISIONS.md      design decisions log
 - Tilt: Player free-lateral unit tests; browser: permission denial reverts the toggle; with
   permission stubbed, synthetic `deviceorientation` (γ 20° / −25°) steers x to +2.0 / −2.5 m
   and lateral swipes no longer change lanes. Real-device tilt feel not verified.
+- Visual overhaul (PBR): pose unit tests (periodic run cycle, knee tuck, slide/jump shapes,
+  frame-rate-independent blending). Browser (390×844 + desktop): close-ups of explorer (run,
+  leap, slide), Warden, obstacles (rubble, beam, pillar, fallen column), bridge, corner
+  guardian, ferns/vines; GPU-synced high 7.3 ms / medium 3.3 ms / low 1.8 ms; 60 s autopilot
+  run with geometries/textures constant (44/19) and no console errors. Low preset renders
+  without post. Not verified: real phones.
